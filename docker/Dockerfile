@@ -78,9 +78,6 @@ COPY --from=api-builder /app/apps/api/dist ./apps/api/dist
 COPY --from=api-builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=api-builder /app/apps/api/node_modules/.prisma ./apps/api/node_modules/.prisma
 
-# Regenerate Prisma client for production Alpine
-RUN cd apps/api && npx prisma generate
-
 # Set ownership
 RUN chown -R booked:nodejs /app
 
