@@ -1240,7 +1240,7 @@ case "${PROXY_TYPE}" in
 esac
 
 # Run migrations
-docker compose exec api npx prisma migrate deploy
+docker compose exec api sh -c "cd /app/apps/api && /app/node_modules/.bin/prisma migrate deploy"
 
 echo "BOOKED updated successfully!"
 EOF
@@ -1283,11 +1283,11 @@ build_and_start() {
 
     # Run migrations
     log_info "Running database migrations..."
-    docker compose run --rm api npx prisma migrate deploy
+    docker compose run --rm api sh -c "cd /app/apps/api && /app/node_modules/.bin/prisma migrate deploy"
 
     # Seed admin user
     log_info "Creating admin user..."
-    docker compose run --rm api npx prisma db seed
+    docker compose run --rm api sh -c "cd /app/apps/api && /app/node_modules/.bin/prisma db seed"
 
     log_success "Database initialized"
 }
