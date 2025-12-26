@@ -11,7 +11,7 @@ import {
   format,
   parseISO,
 } from 'date-fns';
-import { zonedTimeToUtc, utcToZonedTime, formatInTimeZone } from 'date-fns-tz';
+import { fromZonedTime, toZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { getPrismaClient } from '../../infrastructure/database/client.js';
 
 export interface TimeRange {
@@ -58,7 +58,7 @@ function parseScheduleTime(
 ): Date {
   const dateStr = formatInTimeZone(date, userTimezone, 'yyyy-MM-dd');
   const localDateTime = `${dateStr}T${timeStr}:00`;
-  return zonedTimeToUtc(localDateTime, userTimezone);
+  return fromZonedTime(localDateTime, userTimezone);
 }
 
 /**

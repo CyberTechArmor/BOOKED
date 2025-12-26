@@ -1,4 +1,4 @@
-import { OrgRole } from '@prisma/client';
+import { OrgRole } from '../../types/prisma.js';
 import { getPrismaClient } from '../../infrastructure/database/client.js';
 import { getNotificationQueue } from '../../infrastructure/queue/queues.js';
 import { NotFoundError, ForbiddenError, ConflictError } from '../../common/utils/errors.js';

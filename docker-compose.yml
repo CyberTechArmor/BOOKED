@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: api
+    container_name: booked-api
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      - DATABASE_URL=${DATABASE_URL:-postgresql://booked:booked@postgres:5432/booked?schema=public}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:4000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@booked.local}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme123!}
+      - ADMIN_NAME=${ADMIN_NAME:-Administrator}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - booked-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: web
+    container_name: booked-web
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=${API_URL:-http://localhost:3000}
+    restart: unless-stopped
+    networks:
+      - booked-network
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: booked-postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-booked}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-booked}
+      - POSTGRES_DB=${POSTGRES_DB:-booked}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-booked} -d ${POSTGRES_DB:-booked}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - booked-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: booked-redis
+    volumes:
+      - redis_data:/data
+    command: >
+      redis-server
+      --appendonly yes
+      ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - booked-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  booked-network:
+    driver: bridge

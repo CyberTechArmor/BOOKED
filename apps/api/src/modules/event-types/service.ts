@@ -1,4 +1,4 @@
-import { AssignmentType, LocationType } from '@prisma/client';
+import { AssignmentType, LocationType } from '../../types/prisma.js';
 import { getPrismaClient } from '../../infrastructure/database/client.js';
 import { NotFoundError, ConflictError, ForbiddenError } from '../../common/utils/errors.js';
 import { getContext } from '../../common/utils/context.js';

@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { ResourceType } from '@prisma/client';
+import { ResourceType } from '../../types/prisma.js';
 import { getPrismaClient } from '../../infrastructure/database/client.js';
 import { authenticate, requirePermission } from '../../common/middleware/auth.js';
 import { ValidationError, ForbiddenError, NotFoundError } from '../../common/utils/errors.js';

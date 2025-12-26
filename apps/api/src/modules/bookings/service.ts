@@ -1,4 +1,4 @@
-import { BookingStatus } from '@prisma/client';
+import { BookingStatus } from '../../types/prisma.js';
 import { getPrismaClient } from '../../infrastructure/database/client.js';
 import { getContext } from '../../common/utils/context.js';
 import { NotFoundError, ForbiddenError } from '../../common/utils/errors.js';

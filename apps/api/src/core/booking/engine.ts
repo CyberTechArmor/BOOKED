@@ -1,4 +1,5 @@
-import { BookingStatus, BookingSource, AttendeeResponse, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { BookingStatus, BookingSource, AttendeeResponse } from '../../types/prisma.js';
 import { getPrismaClient } from '../../infrastructure/database/client.js';
 import { getRedisClient } from '../../infrastructure/cache/redis.js';
 import { getNotificationQueue, getWebhookQueue } from '../../infrastructure/queue/queues.js';
