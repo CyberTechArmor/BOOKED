@@ -9,8 +9,8 @@ FROM node:20-alpine AS base
 
 WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache python3 make g++ curl
+# Install build dependencies and openssl for Prisma
+RUN apk add --no-cache python3 make g++ curl openssl
 
 # Copy package files
 COPY package*.json ./
@@ -34,8 +34,8 @@ FROM deps AS api-builder
 COPY tsconfig.json ./
 COPY apps/api ./apps/api
 
-# Generate Prisma client
-RUN cd apps/api && npx prisma generate
+# Generate Prisma client (use local binary, not npx)
+RUN cd apps/api && ../../node_modules/.bin/prisma generate
 
 # Build API
 RUN npm run build -w apps/api
@@ -59,8 +59,8 @@ FROM node:20-alpine AS api
 
 WORKDIR /app
 
-# Install curl for health checks
-RUN apk add --no-cache curl
+# Install curl for health checks and openssl for Prisma
+RUN apk add --no-cache curl openssl
 
 # Security: run as non-root user
 RUN addgroup --system --gid 1001 nodejs && \
