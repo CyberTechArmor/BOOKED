@@ -1258,16 +1258,16 @@ build_and_start() {
     # Build images
     case $PROXY_TYPE in
         nginx)
-            docker compose -f docker-compose.yml -f docker-compose.nginx.yml build
+            docker compose -f docker-compose.yml -f docker-compose.nginx.yml build --no-cache
             ;;
         traefik)
-            docker compose -f docker-compose.yml -f docker-compose.traefik.yml build
+            docker compose -f docker-compose.yml -f docker-compose.traefik.yml build --no-cache
             ;;
         caddy)
-            docker compose -f docker-compose.yml -f docker-compose.caddy.yml build
+            docker compose -f docker-compose.yml -f docker-compose.caddy.yml build --no-cache
             ;;
         none)
-            docker compose -f docker-compose.yml -f docker-compose.external-proxy.yml build
+            docker compose -f docker-compose.yml -f docker-compose.external-proxy.yml build --no-cache
             ;;
     esac
 
