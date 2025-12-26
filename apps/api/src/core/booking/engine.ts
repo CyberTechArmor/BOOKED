@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, Booking, BookingAttendee, User, EventType } from '@prisma/client';
 import { BookingStatus, BookingSource, AttendeeResponse } from '../../types/prisma.js';
 import { getPrismaClient } from '../../infrastructure/database/client.js';
 import { getRedisClient } from '../../infrastructure/cache/redis.js';
@@ -65,6 +65,13 @@ export interface BookingResult {
 }
 
 const SLOT_LOCK_TTL_MS = 30000; // 30 seconds
+
+// Type for booking with included relations
+type BookingWithRelations = Booking & {
+  attendees: BookingAttendee[];
+  host: Pick<User, 'id' | 'name' | 'email'>;
+  eventType: Pick<EventType, 'id' | 'title' | 'slug'> | null;
+};
 
 /**
  * Acquire a distributed lock on a time slot
@@ -251,7 +258,7 @@ export async function createBooking(data: CreateBookingData): Promise<BookingRes
           title: data.title,
           description: data.description,
           meetingUrl,
-          customFieldResponses: data.customFieldResponses ?? {},
+          customFieldResponses: (data.customFieldResponses ?? {}) as Prisma.InputJsonValue,
           source: data.source ?? (ctx.apiKeyId ? 'API' : 'WEB'),
           attendees: {
             create: {
@@ -307,7 +314,7 @@ export async function createBooking(data: CreateBookingData): Promise<BookingRes
         },
       });
 
-      return booking;
+      return booking as BookingWithRelations;
     });
 
     // 3. Queue notifications (outside transaction)
@@ -438,7 +445,7 @@ export async function cancelBooking(
       },
     });
 
-    return updated;
+    return updated as BookingWithRelations;
   });
 
   // Queue notifications
@@ -541,7 +548,7 @@ export async function confirmBooking(bookingId: string): Promise<BookingResult> 
       },
     });
 
-    return updated;
+    return updated as BookingWithRelations;
   });
 
   // Queue notification

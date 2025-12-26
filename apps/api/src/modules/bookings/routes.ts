@@ -33,7 +33,7 @@ function validateBody<T>(schema: z.ZodSchema<T>, body: unknown): T {
   return result.data;
 }
 
-function validateQuery<T>(schema: z.ZodSchema<T>, query: unknown): T {
+function validateQuery<T extends z.ZodTypeAny>(schema: T, query: unknown): z.infer<T> {
   const result = schema.safeParse(query);
   if (!result.success) {
     throw new ValidationError('Invalid query parameters', result.error.errors);

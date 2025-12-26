@@ -211,7 +211,11 @@ export async function createBooking(input: CreateBookingInput): Promise<BookingR
     timezone: input.timezone,
     title: input.title,
     description: input.description,
-    attendee: input.attendee,
+    attendee: {
+      email: input.attendee.email,
+      name: input.attendee.name,
+      phone: input.attendee.phone,
+    },
     customFieldResponses: input.customFieldResponses,
     resourceIds: input.resourceIds,
   };

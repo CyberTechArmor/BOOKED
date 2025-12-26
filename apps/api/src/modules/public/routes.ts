@@ -275,7 +275,11 @@ export async function publicRoutes(app: FastifyInstance): Promise<void> {
         startTime: new Date(input.startTime),
         endTime: new Date(input.endTime),
         timezone: input.timezone,
-        attendee: input.attendee,
+        attendee: {
+          email: input.attendee.email,
+          name: input.attendee.name,
+          phone: input.attendee.phone,
+        },
         customFieldResponses: input.customFieldResponses,
         source: 'WEB',
       };

@@ -344,7 +344,6 @@ export async function resetPassword(input: ResetPasswordInput): Promise<void> {
 
   const resetToken = await db.passwordResetToken.findUnique({
     where: { token: input.token },
-    include: { user: false },
   });
 
   if (!resetToken || resetToken.expiresAt < new Date() || resetToken.usedAt) {
