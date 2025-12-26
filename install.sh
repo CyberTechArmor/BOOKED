@@ -64,18 +64,170 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Check system requirements
+# Detect OS
+detect_os() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS=$ID
+        OS_VERSION=$VERSION_ID
+    elif [ -f /etc/redhat-release ]; then
+        OS="rhel"
+    elif [ -f /etc/debian_version ]; then
+        OS="debian"
+    else
+        OS="unknown"
+    fi
+    echo "$OS"
+}
+
+# Install Docker
+install_docker() {
+    local os=$(detect_os)
+
+    log_info "Installing Docker..."
+
+    case "$os" in
+        ubuntu|debian)
+            # Remove old versions
+            sudo apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
+
+            # Install prerequisites
+            sudo apt-get update
+            sudo apt-get install -y ca-certificates curl gnupg lsb-release
+
+            # Add Docker's official GPG key
+            sudo mkdir -p /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/$os/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+            # Set up repository
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$os $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+            # Install Docker Engine
+            sudo apt-get update
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+            ;;
+        centos|rhel|fedora|rocky|almalinux)
+            # Remove old versions
+            sudo yum remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine 2>/dev/null || true
+
+            # Install prerequisites
+            sudo yum install -y yum-utils
+
+            # Add Docker repository
+            sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+
+            # Install Docker Engine
+            sudo yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+            ;;
+        amzn)
+            # Amazon Linux
+            sudo yum update -y
+            sudo yum install -y docker
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            # Install docker-compose separately for Amazon Linux
+            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+            ;;
+        *)
+            log_error "Unsupported OS: $os"
+            log_info "Please install Docker manually: https://docs.docker.com/engine/install/"
+            exit 1
+            ;;
+    esac
+
+    # Start and enable Docker
+    sudo systemctl start docker
+    sudo systemctl enable docker
+
+    # Add current user to docker group
+    if [ "$EUID" -ne 0 ]; then
+        sudo usermod -aG docker "$USER"
+        log_warning "Added $USER to docker group. You may need to log out and back in for this to take effect."
+    fi
+
+    log_success "Docker installed successfully"
+}
+
+# Install git
+install_git() {
+    local os=$(detect_os)
+
+    log_info "Installing git..."
+
+    case "$os" in
+        ubuntu|debian)
+            sudo apt-get update
+            sudo apt-get install -y git
+            ;;
+        centos|rhel|fedora|rocky|almalinux|amzn)
+            sudo yum install -y git
+            ;;
+        *)
+            log_error "Unsupported OS: $os"
+            exit 1
+            ;;
+    esac
+
+    log_success "Git installed successfully"
+}
+
+# Install openssl
+install_openssl() {
+    local os=$(detect_os)
+
+    log_info "Installing openssl..."
+
+    case "$os" in
+        ubuntu|debian)
+            sudo apt-get update
+            sudo apt-get install -y openssl
+            ;;
+        centos|rhel|fedora|rocky|almalinux|amzn)
+            sudo yum install -y openssl
+            ;;
+        *)
+            log_error "Unsupported OS: $os"
+            exit 1
+            ;;
+    esac
+
+    log_success "OpenSSL installed successfully"
+}
+
+# Install curl
+install_curl() {
+    local os=$(detect_os)
+
+    log_info "Installing curl..."
+
+    case "$os" in
+        ubuntu|debian)
+            sudo apt-get update
+            sudo apt-get install -y curl
+            ;;
+        centos|rhel|fedora|rocky|almalinux|amzn)
+            sudo yum install -y curl
+            ;;
+        *)
+            log_error "Unsupported OS: $os"
+            exit 1
+            ;;
+    esac
+
+    log_success "curl installed successfully"
+}
+
+# Check and install system requirements
 check_requirements() {
     log_info "Checking system requirements..."
 
     local missing_deps=()
+    local needs_install=false
 
-    if ! command_exists docker; then
-        missing_deps+=("docker")
-    fi
-
-    if ! command_exists docker-compose && ! docker compose version >/dev/null 2>&1; then
-        missing_deps+=("docker-compose")
+    # Check each dependency
+    if ! command_exists curl; then
+        missing_deps+=("curl")
     fi
 
     if ! command_exists git; then
@@ -86,21 +238,93 @@ check_requirements() {
         missing_deps+=("openssl")
     fi
 
+    if ! command_exists docker; then
+        missing_deps+=("docker")
+    fi
+
+    if ! command_exists docker-compose && ! docker compose version >/dev/null 2>&1; then
+        if command_exists docker; then
+            # Docker exists but compose doesn't - might be older install
+            missing_deps+=("docker-compose")
+        fi
+    fi
+
+    # If there are missing dependencies, offer to install them
     if [ ${#missing_deps[@]} -ne 0 ]; then
-        log_error "Missing required dependencies: ${missing_deps[*]}"
+        log_warning "Missing dependencies: ${missing_deps[*]}"
         echo ""
-        echo "Please install the missing dependencies and run this script again."
-        echo ""
-        echo "On Ubuntu/Debian:"
-        echo "  sudo apt update && sudo apt install -y docker.io docker-compose git openssl"
-        echo "  sudo systemctl enable --now docker"
-        echo "  sudo usermod -aG docker \$USER"
-        echo ""
-        echo "On CentOS/RHEL:"
-        echo "  sudo yum install -y docker docker-compose git openssl"
-        echo "  sudo systemctl enable --now docker"
-        echo "  sudo usermod -aG docker \$USER"
-        exit 1
+        read -p "Would you like to install the missing dependencies automatically? [Y/n]: " INSTALL_DEPS
+        INSTALL_DEPS=${INSTALL_DEPS:-Y}
+
+        if [[ "$INSTALL_DEPS" =~ ^[Yy]$ ]]; then
+            # Check if we have sudo access
+            if ! sudo -v 2>/dev/null; then
+                log_error "sudo access is required to install dependencies"
+                exit 1
+            fi
+
+            for dep in "${missing_deps[@]}"; do
+                case "$dep" in
+                    curl)
+                        install_curl
+                        ;;
+                    git)
+                        install_git
+                        ;;
+                    openssl)
+                        install_openssl
+                        ;;
+                    docker|docker-compose)
+                        if ! command_exists docker; then
+                            install_docker
+                        fi
+                        ;;
+                esac
+            done
+
+            # Verify installation
+            log_info "Verifying installations..."
+
+            local still_missing=()
+
+            if ! command_exists docker; then
+                still_missing+=("docker")
+            fi
+
+            if ! command_exists docker-compose && ! docker compose version >/dev/null 2>&1; then
+                still_missing+=("docker-compose")
+            fi
+
+            if ! command_exists git; then
+                still_missing+=("git")
+            fi
+
+            if ! command_exists openssl; then
+                still_missing+=("openssl")
+            fi
+
+            if [ ${#still_missing[@]} -ne 0 ]; then
+                log_error "Failed to install: ${still_missing[*]}"
+                log_info "Please install these manually and run the script again."
+                exit 1
+            fi
+        else
+            log_error "Cannot proceed without required dependencies."
+            echo ""
+            echo "Please install the missing dependencies manually:"
+            echo ""
+            echo "On Ubuntu/Debian:"
+            echo "  sudo apt update && sudo apt install -y docker.io docker-compose git openssl curl"
+            echo "  sudo systemctl enable --now docker"
+            echo "  sudo usermod -aG docker \$USER"
+            echo ""
+            echo "On CentOS/RHEL/Rocky/Alma:"
+            echo "  sudo yum install -y docker docker-compose git openssl curl"
+            echo "  sudo systemctl enable --now docker"
+            echo "  sudo usermod -aG docker \$USER"
+            echo ""
+            exit 1
+        fi
     fi
 
     log_success "All system requirements met"
