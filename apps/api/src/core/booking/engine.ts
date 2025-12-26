@@ -1,4 +1,4 @@
-import { Prisma, Booking, BookingAttendee, User, EventType } from '@prisma/client';
+import { Prisma, Booking, Attendee, User, EventType } from '@prisma/client';
 import { BookingStatus, BookingSource, AttendeeResponse } from '../../types/prisma.js';
 import { getPrismaClient } from '../../infrastructure/database/client.js';
 import { getRedisClient } from '../../infrastructure/cache/redis.js';
@@ -68,7 +68,7 @@ const SLOT_LOCK_TTL_MS = 30000; // 30 seconds
 
 // Type for booking with included relations
 type BookingWithRelations = Booking & {
-  attendees: BookingAttendee[];
+  attendees: Attendee[];
   host: Pick<User, 'id' | 'name' | 'email'>;
   eventType: Pick<EventType, 'id' | 'title' | 'slug'> | null;
 };
