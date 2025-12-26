@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 # Configuration
 REPO_URL="https://github.com/CyberTechArmor/BOOKED.git"
 INSTALL_DIR="/opt/booked"
-BRANCH="claude/booked-scheduling-system-Tj7o1"
+BRANCH="claude/fix-install-cleanup-script-0IXZw"
 
 print_banner() {
     echo -e "${CYAN}"
