@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { OrgRole } from '../../types/prisma.js';
 import { getPrismaClient } from '../../infrastructure/database/client.js';
 import { getNotificationQueue } from '../../infrastructure/queue/queues.js';
@@ -77,7 +78,10 @@ export async function updateOrganization(
 
   const org = await db.organization.update({
     where: { id: organizationId },
-    data: input,
+    data: {
+      ...input,
+      settings: input.settings as Prisma.InputJsonValue | undefined,
+    },
   });
 
   return {

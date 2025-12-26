@@ -670,8 +670,6 @@ EOF
 
     # Docker compose override for nginx
     cat > "$INSTALL_DIR/docker-compose.nginx.yml" << EOF
-version: '3.8'
-
 services:
   nginx:
     image: nginx:alpine
@@ -860,8 +858,6 @@ EOF
 
     # Docker compose override for traefik
     cat > "$INSTALL_DIR/docker-compose.traefik.yml" << EOF
-version: '3.8'
-
 services:
   traefik:
     image: traefik:v3.0
@@ -972,8 +968,6 @@ EOF
 
     # Docker compose override for caddy
     cat > "$INSTALL_DIR/docker-compose.caddy.yml" << EOF
-version: '3.8'
-
 services:
   caddy:
     image: caddy:2-alpine
@@ -1128,8 +1122,6 @@ EOF
 
     # Modify docker-compose to expose ports directly
     cat > "$INSTALL_DIR/docker-compose.external-proxy.yml" << EOF
-version: '3.8'
-
 services:
   api:
     ports:
