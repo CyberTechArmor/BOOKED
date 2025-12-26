@@ -1,0 +1,722 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ORGANIZATION & MULTI-TENANCY
+// ============================================================================
+
+model Organization {
+  id                String   @id @default(cuid())
+  name              String
+  slug              String   @unique
+  domain            String?  @unique  // Custom domain for white-labeling
+
+  // Branding
+  logoUrl           String?
+  primaryColor      String?  @default("#0066FF")
+
+  // Settings
+  defaultTimezone   String   @default("UTC")
+  settings          Json     @default("{}")  // Flexible org settings
+
+  // Compliance
+  hipaaEnabled      Boolean  @default(false)
+  dataRetentionDays Int      @default(365)
+
+  // Timestamps
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?  // Soft delete
+
+  // Relations
+  users             OrganizationUser[]
+  eventTypes        EventType[]
+  resources         Resource[]
+  bookings          Booking[]
+  webhooks          Webhook[]
+  apiKeys           ApiKey[]
+  auditLogs         AuditLog[]
+  notificationTemplates NotificationTemplate[]
+
+  @@index([slug])
+  @@index([domain])
+}
+
+model OrganizationUser {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrgRole  @default(MEMBER)
+
+  // Permissions (granular)
+  permissions    Json     @default("[]")
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+  READONLY
+}
+
+// ============================================================================
+// USER & AUTHENTICATION
+// ============================================================================
+
+model User {
+  id                String    @id @default(cuid())
+
+  // Basic auth (nullable if using external provider)
+  email             String    @unique
+  passwordHash      String?
+
+  // Profile
+  name              String
+  avatarUrl         String?
+  timezone          String    @default("UTC")
+  locale            String    @default("en")
+
+  // External auth linkage
+  externalId        String?   // ID from external provider (Keycloak, NEON, etc.)
+  externalProvider  String?   // "keycloak", "neon", "google", etc.
+
+  // Account status
+  emailVerified     Boolean   @default(false)
+  status            UserStatus @default(ACTIVE)
+
+  // Security
+  mfaEnabled        Boolean   @default(false)
+  mfaSecret         String?
+  lastLoginAt       DateTime?
+  lastLoginIp       String?
+
+  // Timestamps
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  // Relations
+  organizations     OrganizationUser[]
+  schedules         UserSchedule[]
+  eventTypes        EventType[]
+  bookingsAsHost    Booking[]  @relation("BookingHost")
+  attendees         Attendee[]
+  sessions          Session[]
+  calendarConnections CalendarConnection[]
+
+  @@index([email])
+  @@index([externalId, externalProvider])
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+}
+
+// ============================================================================
+// SCHEDULES & AVAILABILITY
+// ============================================================================
+
+model UserSchedule {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String   // "Client Hours", "Internal Availability", etc.
+  isDefault   Boolean  @default(false)
+
+  // Constraints (all optional/toggleable)
+  bufferBefore      Int?     // Minutes before meeting
+  bufferAfter       Int?     // Minutes after meeting
+  minimumNotice     Int?     // Minimum hours notice required
+  maxBookingsPerDay Int?     // Daily booking cap
+  maxBookingsPerWeek Int?    // Weekly booking cap
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  windows     ScheduleWindow[]
+  eventTypes  EventTypeSchedule[]
+
+  @@index([userId])
+}
+
+model ScheduleWindow {
+  id          String   @id @default(cuid())
+  scheduleId  String
+
+  dayOfWeek   Int      // 0 = Sunday, 6 = Saturday
+  startTime   String   // "09:00" (HH:mm in schedule's timezone)
+  endTime     String   // "17:00"
+
+  // For date-specific overrides
+  specificDate DateTime?  // If set, applies only to this date
+  isAvailable  Boolean    @default(true)  // false = blocked time
+
+  schedule    UserSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId])
+  @@index([specificDate])
+}
+
+// ============================================================================
+// EVENT TYPES
+// ============================================================================
+
+model EventType {
+  id              String   @id @default(cuid())
+  organizationId  String
+  ownerId         String?  // Null for org-level event types
+
+  // Basic info
+  title           String
+  slug            String
+  description     String?
+
+  // Duration
+  durationMinutes Int      @default(30)
+
+  // Booking settings
+  isActive        Boolean  @default(true)
+  isPublic        Boolean  @default(true)  // Visible on public booking page
+  requiresConfirmation Boolean @default(false)
+
+  // Assignment
+  assignmentType  AssignmentType @default(SINGLE)
+
+  // Location/conferencing
+  locationType    LocationType   @default(MEET)
+  locationValue   String?        // Custom location, phone number, etc.
+
+  // Customization
+  color           String?
+  customFields    Json     @default("[]")  // Additional booking form fields
+
+  // Constraints (override user schedule)
+  bufferBefore      Int?
+  bufferAfter       Int?
+  minimumNotice     Int?
+  maxBookingsPerDay Int?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner           User?        @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  schedules       EventTypeSchedule[]
+  hosts           EventTypeHost[]
+  bookings        Booking[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@index([ownerId])
+}
+
+enum AssignmentType {
+  SINGLE          // Single host
+  ROUND_ROBIN     // Rotate among hosts
+  COLLECTIVE      // All hosts must be available
+}
+
+enum LocationType {
+  MEET            // MEET video conference
+  PHONE           // Phone call
+  IN_PERSON       // Physical location
+  CUSTOM          // Custom URL or instructions
+}
+
+model EventTypeSchedule {
+  id          String   @id @default(cuid())
+  eventTypeId String
+  scheduleId  String
+
+  eventType   EventType    @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  schedule    UserSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@unique([eventTypeId, scheduleId])
+}
+
+model EventTypeHost {
+  id          String   @id @default(cuid())
+  eventTypeId String
+  userId      String
+
+  // Round-robin settings
+  priority    Int      @default(0)  // Higher = more likely to be assigned
+  isActive    Boolean  @default(true)
+
+  // Stats for round-robin balancing
+  bookingCount Int     @default(0)
+  lastBookedAt DateTime?
+
+  eventType   EventType @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([eventTypeId, userId])
+  @@index([eventTypeId])
+}
+
+// ============================================================================
+// RESOURCES (Rooms, Equipment)
+// ============================================================================
+
+model Resource {
+  id             String   @id @default(cuid())
+  organizationId String
+
+  name           String
+  type           ResourceType
+  description    String?
+  capacity       Int?     // For rooms
+
+  // Availability
+  isActive       Boolean  @default(true)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bookings       BookingResource[]
+
+  @@index([organizationId])
+}
+
+enum ResourceType {
+  ROOM
+  EQUIPMENT
+  OTHER
+}
+
+// ============================================================================
+// BOOKINGS
+// ============================================================================
+
+model Booking {
+  id              String   @id @default(cuid())
+  organizationId  String
+  eventTypeId     String?  // Null for ad-hoc bookings
+  hostId          String
+
+  // Unique reference for external systems
+  uid             String   @unique @default(cuid())
+
+  // Timing
+  startTime       DateTime
+  endTime         DateTime
+  timezone        String   // Booker's timezone for reference
+
+  // Status
+  status          BookingStatus @default(PENDING)
+
+  // Details
+  title           String?
+  description     String?
+  location        String?
+  meetingUrl      String?  // MEET link or other video URL
+
+  // Custom field responses
+  customFieldResponses Json @default("{}")
+
+  // Cancellation
+  cancelledAt     DateTime?
+  cancelReason    String?
+  cancelledBy     String?  // User ID or "SYSTEM"
+
+  // Rescheduling
+  rescheduledFrom String?  // Previous booking ID
+
+  // Metadata
+  source          BookingSource @default(WEB)
+  metadata        Json     @default("{}")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  eventType       EventType?   @relation(fields: [eventTypeId], references: [id], onDelete: SetNull)
+  host            User         @relation("BookingHost", fields: [hostId], references: [id], onDelete: Cascade)
+  attendees       Attendee[]
+  resources       BookingResource[]
+  auditLogs       BookingAuditLog[]
+
+  @@index([organizationId])
+  @@index([hostId])
+  @@index([eventTypeId])
+  @@index([startTime])
+  @@index([status])
+  @@index([uid])
+}
+
+enum BookingStatus {
+  PENDING         // Awaiting confirmation
+  CONFIRMED       // Confirmed
+  CANCELLED       // Cancelled by host or attendee
+  COMPLETED       // Past and completed
+  NO_SHOW         // Attendee didn't show
+}
+
+enum BookingSource {
+  WEB             // Public booking page
+  API             // API integration
+  NEON            // Via NEON integration
+  INTERNAL        // Internal scheduling
+}
+
+model Attendee {
+  id          String   @id @default(cuid())
+  bookingId   String
+
+  // Can be linked to a user or external
+  userId      String?
+
+  // External attendee info
+  email       String
+  name        String
+  phone       String?
+
+  // Response
+  responseStatus AttendeeResponse @default(PENDING)
+  respondedAt    DateTime?
+
+  // For collective bookings - which hosts
+  isHost      Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId])
+  @@index([userId])
+  @@index([email])
+}
+
+enum AttendeeResponse {
+  PENDING
+  ACCEPTED
+  DECLINED
+  TENTATIVE
+}
+
+model BookingResource {
+  id         String   @id @default(cuid())
+  bookingId  String
+  resourceId String
+
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingId, resourceId])
+}
+
+// ============================================================================
+// BUSY BLOCKS (External Calendar Sync)
+// ============================================================================
+
+model BusyBlock {
+  id              String   @id @default(cuid())
+  userId          String
+  connectionId    String   // Which calendar connection
+  externalEventId String   // ID in external system
+
+  startTime       DateTime
+  endTime         DateTime
+
+  // Metadata (for display, not used in conflict detection)
+  title           String?
+  isAllDay        Boolean  @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([connectionId, externalEventId])
+  @@index([userId, startTime, endTime])
+}
+
+// ============================================================================
+// CALENDAR CONNECTIONS
+// ============================================================================
+
+model CalendarConnection {
+  id              String   @id @default(cuid())
+  userId          String
+
+  provider        CalendarProvider
+
+  // OAuth tokens (encrypted)
+  accessToken     String
+  refreshToken    String?
+  tokenExpiresAt  DateTime?
+
+  // Account info
+  externalAccountId String
+  email           String?
+
+  // Sync settings
+  isPrimary       Boolean  @default(false)  // Write new events here
+  syncEnabled     Boolean  @default(true)
+  lastSyncAt      DateTime?
+  lastSyncError   String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider, externalAccountId])
+  @@index([userId])
+}
+
+enum CalendarProvider {
+  GOOGLE
+  MICROSOFT
+  CALDAV
+}
+
+// ============================================================================
+// WEBHOOKS
+// ============================================================================
+
+model Webhook {
+  id             String   @id @default(cuid())
+  organizationId String
+
+  name           String
+  url            String
+  secret         String   // For signature verification
+
+  // Events to trigger on
+  events         String[] // ["booking.created", "booking.cancelled", etc.]
+
+  // Status
+  isActive       Boolean  @default(true)
+
+  // Stats
+  lastTriggeredAt DateTime?
+  failureCount    Int      @default(0)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries     WebhookDelivery[]
+
+  @@index([organizationId])
+}
+
+model WebhookDelivery {
+  id          String   @id @default(cuid())
+  webhookId   String
+
+  event       String
+  payload     Json
+
+  // Response
+  statusCode  Int?
+  response    String?
+  duration    Int?     // ms
+
+  // Status
+  success     Boolean
+  attempts    Int      @default(1)
+
+  createdAt   DateTime @default(now())
+
+  webhook     Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// API KEYS
+// ============================================================================
+
+model ApiKey {
+  id             String   @id @default(cuid())
+  organizationId String
+
+  name           String
+  keyHash        String   @unique  // SHA256 hash of the key
+  keyPrefix      String            // First 8 chars for identification
+
+  // Permissions
+  scopes         String[]  // ["bookings:read", "bookings:write", etc.]
+
+  // Limits
+  rateLimit      Int?     // Requests per minute
+
+  // Expiration
+  expiresAt      DateTime?
+
+  // Stats
+  lastUsedAt     DateTime?
+  usageCount     Int      @default(0)
+
+  createdAt      DateTime @default(now())
+  revokedAt      DateTime?
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([keyHash])
+}
+
+// ============================================================================
+// AUDIT LOGGING (HIPAA Compliance)
+// ============================================================================
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+
+  // Actor
+  actorId        String?  // User ID or null for system
+  actorType      ActorType
+  actorIp        String?
+  actorUserAgent String?
+
+  // Action
+  action         String   // "booking.created", "user.updated", etc.
+  resourceType   String   // "Booking", "User", etc.
+  resourceId     String?
+
+  // Changes
+  previousState  Json?
+  newState       Json?
+
+  // Request context
+  requestId      String?
+
+  timestamp      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([actorId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([timestamp])
+}
+
+enum ActorType {
+  USER
+  API_KEY
+  SYSTEM
+  WEBHOOK
+}
+
+model BookingAuditLog {
+  id          String   @id @default(cuid())
+  bookingId   String
+
+  action      String   // "created", "confirmed", "cancelled", "rescheduled"
+  actorId     String?
+  actorType   ActorType
+
+  details     Json?
+
+  timestamp   DateTime @default(now())
+
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([timestamp])
+}
+
+// ============================================================================
+// NOTIFICATION TEMPLATES
+// ============================================================================
+
+model NotificationTemplate {
+  id             String   @id @default(cuid())
+  organizationId String?  // Null for system defaults
+
+  type           NotificationType
+  channel        NotificationChannel
+
+  subject        String?  // For email
+  body           String   // Template with {{variables}}
+
+  isActive       Boolean  @default(true)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, type, channel])
+}
+
+enum NotificationType {
+  BOOKING_CREATED
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  BOOKING_RESCHEDULED
+  BOOKING_REMINDER
+  BOOKING_FOLLOWUP
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+}

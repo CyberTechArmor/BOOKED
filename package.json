@@ -1,0 +1,55 @@
+{
+  "name": "booked",
+  "version": "1.0.0",
+  "description": "Scheduling infrastructure for teams and enterprises",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "npm run dev -w apps/api",
+    "dev:web": "npm run dev -w apps/web",
+    "build": "npm run build -w apps/api && npm run build -w apps/web",
+    "build:api": "npm run build -w apps/api",
+    "build:web": "npm run build -w apps/web",
+    "start": "npm run start -w apps/api",
+    "test": "npm run test -w apps/api",
+    "test:unit": "npm run test:unit -w apps/api",
+    "test:integration": "npm run test:integration -w apps/api",
+    "test:e2e": "npm run test:e2e -w apps/api",
+    "test:coverage": "npm run test:coverage -w apps/api",
+    "lint": "eslint . --ext .ts,.tsx",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "db:migrate": "npm run db:migrate -w apps/api",
+    "db:generate": "npm run db:generate -w apps/api",
+    "db:push": "npm run db:push -w apps/api",
+    "db:seed": "npm run db:seed -w apps/api",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.55.0",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.1.1",
+    "typescript": "^5.3.3"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.prisma": [
+      "npx prisma format"
+    ]
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "SEE LICENSE IN LICENSE"
+}
