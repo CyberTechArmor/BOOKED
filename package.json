@@ -30,6 +30,9 @@
     "db:seed": "npm run db:seed -w apps/api",
     "prepare": "husky install"
   },
+  "dependencies": {
+    "prisma": "^5.22.0"
+  },
   "devDependencies": {
     "@types/node": "^20.10.0",
     "concurrently": "^8.2.2",
