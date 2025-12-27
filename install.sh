@@ -80,6 +80,245 @@ detect_os() {
     echo "$OS"
 }
 
+# ==============================================================================
+# Hardware Detection and Optimization
+# ==============================================================================
+
+# Get total RAM in MB
+get_total_ram_mb() {
+    if [ -f /proc/meminfo ]; then
+        grep MemTotal /proc/meminfo | awk '{print int($2/1024)}'
+    else
+        # Fallback for non-Linux systems
+        echo "2048"
+    fi
+}
+
+# Get number of CPU cores
+get_cpu_cores() {
+    if [ -f /proc/cpuinfo ]; then
+        grep -c ^processor /proc/cpuinfo
+    else
+        # Fallback
+        echo "1"
+    fi
+}
+
+# Get available disk space in GB
+get_available_disk_gb() {
+    df -BG / | tail -1 | awk '{print int($4)}'
+}
+
+# Get current swap size in MB
+get_swap_size_mb() {
+    if [ -f /proc/meminfo ]; then
+        grep SwapTotal /proc/meminfo | awk '{print int($2/1024)}'
+    else
+        echo "0"
+    fi
+}
+
+# Check if system is low-resource
+is_low_resource_system() {
+    local ram_mb=$(get_total_ram_mb)
+    local cores=$(get_cpu_cores)
+
+    # Consider low-resource if RAM <= 2GB or single core
+    if [ "$ram_mb" -le 2048 ] || [ "$cores" -le 1 ]; then
+        return 0  # true
+    fi
+    return 1  # false
+}
+
+# Display hardware information
+display_hardware_info() {
+    local ram_mb=$(get_total_ram_mb)
+    local cores=$(get_cpu_cores)
+    local disk_gb=$(get_available_disk_gb)
+    local swap_mb=$(get_swap_size_mb)
+
+    echo ""
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}                    HARDWARE DETECTION                          ${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "  ${BLUE}CPU Cores:${NC}        $cores"
+    echo -e "  ${BLUE}Total RAM:${NC}        ${ram_mb} MB"
+    echo -e "  ${BLUE}Current Swap:${NC}     ${swap_mb} MB"
+    echo -e "  ${BLUE}Available Disk:${NC}   ${disk_gb} GB"
+    echo ""
+
+    if is_low_resource_system; then
+        echo -e "  ${YELLOW}⚠️  Low-resource system detected${NC}"
+        echo -e "  ${YELLOW}    Build times may be longer. Optimizations will be applied.${NC}"
+    else
+        echo -e "  ${GREEN}✓ System resources are adequate${NC}"
+    fi
+    echo ""
+}
+
+# Configure swap space for low-resource systems
+configure_swap() {
+    local ram_mb=$(get_total_ram_mb)
+    local swap_mb=$(get_swap_size_mb)
+    local disk_gb=$(get_available_disk_gb)
+
+    # Calculate recommended swap size (2x RAM for systems <= 2GB, 1x for larger)
+    local recommended_swap_mb
+    if [ "$ram_mb" -le 2048 ]; then
+        recommended_swap_mb=$((ram_mb * 2))
+    else
+        recommended_swap_mb=$ram_mb
+    fi
+
+    # Check if swap is already sufficient
+    if [ "$swap_mb" -ge "$recommended_swap_mb" ]; then
+        log_info "Swap space is already sufficient (${swap_mb} MB)"
+        return 0
+    fi
+
+    # Check if we have enough disk space (need at least 5GB free after swap)
+    local swap_gb=$((recommended_swap_mb / 1024 + 1))
+    if [ "$disk_gb" -lt $((swap_gb + 5)) ]; then
+        log_warning "Not enough disk space to create swap file"
+        log_warning "Available: ${disk_gb}GB, Need: $((swap_gb + 5))GB minimum"
+        return 1
+    fi
+
+    log_info "Configuring swap space (${recommended_swap_mb} MB)..."
+
+    # Check if swapfile already exists
+    if [ -f /swapfile ]; then
+        log_info "Existing swapfile found, resizing..."
+        sudo swapoff /swapfile 2>/dev/null || true
+        sudo rm -f /swapfile
+    fi
+
+    # Create swap file
+    sudo fallocate -l ${recommended_swap_mb}M /swapfile 2>/dev/null || \
+        sudo dd if=/dev/zero of=/swapfile bs=1M count=$recommended_swap_mb status=progress
+
+    # Set permissions and format
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile
+    sudo swapon /swapfile
+
+    # Make permanent (if not already in fstab)
+    if ! grep -q "/swapfile" /etc/fstab; then
+        echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab > /dev/null
+    fi
+
+    log_success "Swap space configured (${recommended_swap_mb} MB)"
+    return 0
+}
+
+# Configure Docker daemon for low-resource systems
+configure_docker_limits() {
+    local ram_mb=$(get_total_ram_mb)
+
+    # Only configure if low-resource
+    if ! is_low_resource_system; then
+        return 0
+    fi
+
+    log_info "Configuring Docker for low-resource system..."
+
+    # Create Docker daemon configuration
+    local docker_config="/etc/docker/daemon.json"
+
+    # Calculate memory limits (reserve 512MB for system)
+    local container_memory_limit=$((ram_mb - 512))
+    if [ "$container_memory_limit" -lt 512 ]; then
+        container_memory_limit=512
+    fi
+
+    # Create or update daemon.json
+    if [ ! -f "$docker_config" ]; then
+        sudo mkdir -p /etc/docker
+        sudo tee "$docker_config" > /dev/null << EOF
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  },
+  "storage-driver": "overlay2"
+}
+EOF
+    fi
+
+    # Restart Docker to apply changes
+    if systemctl is-active --quiet docker; then
+        sudo systemctl restart docker
+    fi
+
+    log_success "Docker configured for low-resource system"
+}
+
+# Optimize system for Docker builds
+optimize_for_build() {
+    if ! is_low_resource_system; then
+        log_info "System has adequate resources, skipping optimizations"
+        return 0
+    fi
+
+    log_info "Applying low-resource system optimizations..."
+
+    # 1. Configure swap if needed
+    configure_swap
+
+    # 2. Configure Docker limits
+    configure_docker_limits
+
+    # 3. Set swappiness for better memory management during builds
+    local current_swappiness=$(cat /proc/sys/vm/swappiness 2>/dev/null || echo "60")
+    if [ "$current_swappiness" -lt 60 ]; then
+        log_info "Adjusting swappiness for better build performance..."
+        sudo sysctl -w vm.swappiness=60 > /dev/null 2>&1 || true
+    fi
+
+    # 4. Clear page cache if memory is very low
+    local ram_mb=$(get_total_ram_mb)
+    if [ "$ram_mb" -le 1024 ]; then
+        log_info "Clearing page cache to free memory..."
+        sudo sh -c 'echo 1 > /proc/sys/vm/drop_caches' 2>/dev/null || true
+    fi
+
+    log_success "System optimizations applied"
+}
+
+# Check hardware and offer optimization
+check_hardware_and_optimize() {
+    display_hardware_info
+
+    if is_low_resource_system; then
+        echo -e "  ${YELLOW}This system has limited resources.${NC}"
+        echo -e "  ${YELLOW}Recommended optimizations:${NC}"
+        echo "    • Configure swap space (prevents out-of-memory during builds)"
+        echo "    • Optimize Docker settings (reduces memory usage)"
+        echo "    • Limit concurrent processes (prevents system freeze)"
+        echo ""
+
+        read -p "Apply recommended optimizations? [Y/n]: " APPLY_OPTS
+        APPLY_OPTS=${APPLY_OPTS:-Y}
+
+        if [[ "$APPLY_OPTS" =~ ^[Yy]$ ]]; then
+            # Check if we have sudo access
+            if ! sudo -v 2>/dev/null; then
+                log_error "sudo access is required to apply system optimizations"
+                log_warning "Continuing without optimizations..."
+                return 1
+            fi
+
+            optimize_for_build
+        else
+            log_warning "Skipping optimizations. Build times may be longer and OOM errors possible."
+        fi
+    fi
+
+    return 0
+}
+
 # Install Docker
 install_docker() {
     local os=$(detect_os)
@@ -1259,19 +1498,19 @@ build_and_start() {
     log_info "Cleaning up any existing containers and volumes..."
     docker compose down -v 2>/dev/null || true
 
-    # Build images
+    # Build images (use Docker cache for faster rebuilds on low-resource VPS)
     case $PROXY_TYPE in
         nginx)
-            docker compose -f docker-compose.yml -f docker-compose.nginx.yml build --no-cache
+            docker compose -f docker-compose.yml -f docker-compose.nginx.yml build
             ;;
         traefik)
-            docker compose -f docker-compose.yml -f docker-compose.traefik.yml build --no-cache
+            docker compose -f docker-compose.yml -f docker-compose.traefik.yml build
             ;;
         caddy)
-            docker compose -f docker-compose.yml -f docker-compose.caddy.yml build --no-cache
+            docker compose -f docker-compose.yml -f docker-compose.caddy.yml build
             ;;
         none)
-            docker compose -f docker-compose.yml -f docker-compose.external-proxy.yml build --no-cache
+            docker compose -f docker-compose.yml -f docker-compose.external-proxy.yml build
             ;;
     esac
 
@@ -1289,9 +1528,9 @@ build_and_start() {
     log_info "Pushing database schema..."
     docker compose run --rm api sh -c "cd /app/apps/api && /app/node_modules/.bin/prisma db push --skip-generate"
 
-    # Seed admin user
+    # Seed admin user using tsx (runs TypeScript directly)
     log_info "Creating admin user..."
-    docker compose run --rm api sh -c "cd /app/apps/api && node prisma/seed.js"
+    docker compose run --rm api sh -c "cd /app/apps/api && tsx prisma/seed.ts"
 
     log_success "Database initialized"
 }
@@ -1370,6 +1609,7 @@ EOF
 main() {
     print_banner
     check_requirements
+    check_hardware_and_optimize
     prompt_config
     clone_repository
     generate_env_file
