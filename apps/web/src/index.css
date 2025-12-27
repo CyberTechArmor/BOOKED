@@ -33,11 +33,11 @@ body {
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2;
+    @apply inline-flex items-center justify-center px-4 py-2.5 rounded-lg font-medium transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-primary {
-    @apply btn bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)] focus:ring-[var(--primary)];
+    @apply btn bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)] focus:ring-[var(--primary)] shadow-sm hover:shadow;
   }
 
   .btn-secondary {
@@ -45,22 +45,134 @@ body {
   }
 
   .btn-outline {
-    @apply btn border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-gray-500;
+    @apply btn border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400 focus:ring-gray-500;
   }
 
   .btn-danger {
-    @apply btn bg-[var(--error)] text-white hover:bg-red-600 focus:ring-red-500;
+    @apply btn bg-[var(--error)] text-white hover:bg-red-600 focus:ring-red-500 shadow-sm;
   }
 
+  .btn-ghost {
+    @apply btn text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:ring-gray-500;
+  }
+
+  /* Modern input styles */
   .input {
-    @apply w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent;
+    @apply w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400
+           transition-all duration-150
+           focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-[var(--primary)]
+           hover:border-gray-400;
+  }
+
+  .input:disabled {
+    @apply bg-gray-50 text-gray-500 cursor-not-allowed;
+  }
+
+  .input-error {
+    @apply border-red-300 focus:ring-red-100 focus:border-red-500;
+  }
+
+  /* Modern select styles */
+  select.input {
+    @apply appearance-none bg-no-repeat cursor-pointer;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.75rem center;
+    background-size: 1.25em 1.25em;
+    padding-right: 2.5rem;
+  }
+
+  /* Modern checkbox styles */
+  .checkbox {
+    @apply w-5 h-5 rounded border-2 border-gray-300 text-[var(--primary)] cursor-pointer
+           transition-all duration-150
+           focus:ring-2 focus:ring-blue-100 focus:ring-offset-0
+           checked:bg-[var(--primary)] checked:border-[var(--primary)]
+           hover:border-gray-400;
+  }
+
+  /* Modern switch/toggle styles */
+  .toggle {
+    @apply relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent
+           transition-colors duration-200 ease-in-out
+           focus:outline-none focus:ring-2 focus:ring-blue-100 focus:ring-offset-2;
+  }
+
+  .toggle-checked {
+    @apply bg-[var(--primary)];
+  }
+
+  .toggle-unchecked {
+    @apply bg-gray-200;
   }
 
   .label {
-    @apply block text-sm font-medium text-gray-700 mb-1;
+    @apply block text-sm font-medium text-gray-700 mb-1.5;
   }
 
   .card {
-    @apply bg-white rounded-lg shadow-sm border border-[var(--border)] p-6;
+    @apply bg-white rounded-xl shadow-sm border border-gray-200 p-6;
   }
+
+  .card-hover {
+    @apply card transition-shadow duration-200 hover:shadow-md;
+  }
+
+  /* Form group spacing */
+  .form-group {
+    @apply space-y-1.5;
+  }
+
+  /* Helper text */
+  .helper-text {
+    @apply text-xs text-gray-500 mt-1.5;
+  }
+
+  /* Error text */
+  .error-text {
+    @apply text-xs text-red-500 mt-1.5;
+  }
+
+  /* Badge styles */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply badge bg-blue-100 text-blue-800;
+  }
+
+  .badge-success {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  .badge-warning {
+    @apply badge bg-yellow-100 text-yellow-800;
+  }
+
+  .badge-danger {
+    @apply badge bg-red-100 text-red-800;
+  }
+
+  .badge-gray {
+    @apply badge bg-gray-100 text-gray-800;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }

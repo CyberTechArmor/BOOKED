@@ -122,7 +122,6 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // Setup Prisma middleware for tenant isolation
   const prisma = getPrismaClient();
-  // @ts-expect-error - Custom middleware types are compatible at runtime
   prisma.$use(createTenantIsolationMiddleware());
 
   // Request context hook
