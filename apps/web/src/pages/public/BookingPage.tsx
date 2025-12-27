@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useState, useEffect, useMemo } from 'react';
 
 interface EventType {
@@ -22,7 +22,6 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 
 export default function BookingPage() {
   const { orgSlug, eventSlug } = useParams();
-  const navigate = useNavigate();
 
   const [eventType, setEventType] = useState<EventType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,13 +34,19 @@ export default function BookingPage() {
   const [loadingSlots, setLoadingSlots] = useState(false);
 
   // Booking form
-  const [step, setStep] = useState<'calendar' | 'form'>('calendar');
+  const [step, setStep] = useState<'calendar' | 'form' | 'confirmed'>('calendar');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     notes: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [bookingResult, setBookingResult] = useState<{
+    uid: string;
+    startTime: string;
+    endTime: string;
+    meetingUrl?: string;
+  } | null>(null);
 
   // Fetch event type info
   useEffect(() => {
@@ -214,7 +219,13 @@ export default function BookingPage() {
 
       if (res.ok) {
         const data = await res.json();
-        navigate(`/booking/confirmed/${data.data?.uid || 'success'}`);
+        setBookingResult({
+          uid: data.data?.uid || '',
+          startTime: data.data?.startTime || selectedSlot.start,
+          endTime: data.data?.endTime || selectedSlot.end,
+          meetingUrl: data.data?.meetingUrl,
+        });
+        setStep('confirmed');
       } else {
         const errorData = await res.json().catch(() => null);
         alert(errorData?.error?.message || 'Failed to book. Please try again.');
@@ -297,7 +308,77 @@ export default function BookingPage() {
           </div>
 
           {/* Content */}
-          {step === 'calendar' ? (
+          {step === 'confirmed' && bookingResult ? (
+            /* Confirmation View */
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg className="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-semibold text-gray-900 mb-2">Booking Confirmed!</h2>
+              <p className="text-gray-600 mb-6">
+                Your meeting has been scheduled. A confirmation email will be sent to <span className="font-medium">{formData.email}</span>
+              </p>
+
+              <div className="bg-gray-50 rounded-lg p-6 max-w-md mx-auto text-left mb-6">
+                <h3 className="font-semibold text-gray-900 mb-4">{eventType?.title}</h3>
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-5 h-5 text-gray-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <div>
+                      <p className="font-medium text-gray-900">
+                        {new Date(bookingResult.startTime).toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </p>
+                      <p className="text-gray-600">
+                        {formatTime(bookingResult.startTime)} - {formatTime(bookingResult.endTime)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {bookingResult.meetingUrl && (
+                    <div className="flex items-start gap-3">
+                      <svg className="w-5 h-5 text-gray-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      <div>
+                        <p className="font-medium text-gray-900">Meeting Link</p>
+                        <a
+                          href={bookingResult.meetingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-700 break-all"
+                        >
+                          {bookingResult.meetingUrl}
+                        </a>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-start gap-3">
+                    <svg className="w-5 h-5 text-gray-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <div>
+                      <p className="font-medium text-gray-900">{formData.name}</p>
+                      <p className="text-gray-600">{formData.email}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-500">
+                Booking ID: {bookingResult.uid}
+              </p>
+            </div>
+          ) : step === 'calendar' ? (
             <div className="flex flex-col md:flex-row">
               {/* Calendar */}
               <div className="flex-1 p-6 border-b md:border-b-0 md:border-r border-gray-100">
