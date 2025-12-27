@@ -49,7 +49,7 @@
       "prettier --write"
     ],
     "*.prisma": [
-      "npx prisma format"
+      "./node_modules/.bin/prisma format"
     ]
   },
   "engines": {
