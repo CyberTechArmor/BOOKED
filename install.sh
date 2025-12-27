@@ -1024,7 +1024,8 @@ else
     STAGING_ARG=""
 fi
 
-docker compose -f docker-compose.yml -f docker-compose.nginx.yml run --rm certbot certonly \\
+# Note: --entrypoint "" overrides the renewal-loop entrypoint
+docker compose -f docker-compose.yml -f docker-compose.nginx.yml run --rm --entrypoint "" certbot certbot certonly \\
     --webroot \\
     --webroot-path=/var/www/certbot \\
     \$STAGING_ARG \\
@@ -1631,8 +1632,9 @@ build_and_start() {
             rm -rf ./certbot/conf/accounts 2>/dev/null || true
 
             # Request real certificate from Let's Encrypt
+            # Note: --entrypoint "" overrides the renewal-loop entrypoint in docker-compose
             log_info "Requesting Let's Encrypt certificate for $DOMAIN..."
-            docker compose -f docker-compose.yml -f docker-compose.nginx.yml run --rm certbot certonly \
+            docker compose -f docker-compose.yml -f docker-compose.nginx.yml run --rm --entrypoint "" certbot certbot certonly \
                 --webroot \
                 --webroot-path=/var/www/certbot \
                 --email $LETSENCRYPT_EMAIL \
