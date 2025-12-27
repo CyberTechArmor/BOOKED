@@ -1,5 +1,6 @@
 # ==============================================================================
 # BOOKED - Multi-stage Docker Build
+# Optimized for low-resource VPS (1GB RAM)
 # ==============================================================================
 
 # ==============================================================================
@@ -22,6 +23,9 @@ COPY apps/web/package*.json ./apps/web/
 # ==============================================================================
 FROM base AS deps
 
+# Limit Node.js memory for low-resource systems
+ENV NODE_OPTIONS="--max-old-space-size=512"
+
 # Install all dependencies
 RUN npm ci
 
@@ -29,6 +33,9 @@ RUN npm ci
 # Stage 3: API Builder
 # ==============================================================================
 FROM deps AS api-builder
+
+# Limit memory during build
+ENV NODE_OPTIONS="--max-old-space-size=512"
 
 # Copy source code
 COPY tsconfig.json ./
@@ -40,13 +47,13 @@ RUN cd apps/api && ../../node_modules/.bin/prisma generate
 # Build API
 RUN npm run build -w apps/api
 
-# Compile seed script for production use
-RUN cd apps/api && ../../node_modules/.bin/tsc prisma/seed.ts --outDir prisma --esModuleInterop --skipLibCheck --resolveJsonModule || true
-
 # ==============================================================================
 # Stage 4: Web Builder
 # ==============================================================================
 FROM deps AS web-builder
+
+# Limit memory during build
+ENV NODE_OPTIONS="--max-old-space-size=512"
 
 # Copy source code
 COPY tsconfig.json ./
@@ -62,8 +69,9 @@ FROM node:20-alpine AS api
 
 WORKDIR /app
 
-# Install curl for health checks and openssl for Prisma
-RUN apk add --no-cache curl openssl
+# Install curl for health checks, openssl for Prisma, and tsx for seed script
+RUN apk add --no-cache curl openssl && \
+    npm install -g tsx
 
 # Security: run as non-root user
 RUN addgroup --system --gid 1001 nodejs && \
@@ -79,6 +87,7 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy built API
 COPY --from=api-builder /app/apps/api/dist ./apps/api/dist
 COPY --from=api-builder /app/apps/api/prisma ./apps/api/prisma
+COPY --from=api-builder /app/apps/api/src/types ./apps/api/src/types
 COPY --from=api-builder /app/apps/api/node_modules/.prisma ./apps/api/node_modules/.prisma
 
 # Set ownership

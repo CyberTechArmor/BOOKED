@@ -1259,19 +1259,19 @@ build_and_start() {
     log_info "Cleaning up any existing containers and volumes..."
     docker compose down -v 2>/dev/null || true
 
-    # Build images
+    # Build images (use Docker cache for faster rebuilds on low-resource VPS)
     case $PROXY_TYPE in
         nginx)
-            docker compose -f docker-compose.yml -f docker-compose.nginx.yml build --no-cache
+            docker compose -f docker-compose.yml -f docker-compose.nginx.yml build
             ;;
         traefik)
-            docker compose -f docker-compose.yml -f docker-compose.traefik.yml build --no-cache
+            docker compose -f docker-compose.yml -f docker-compose.traefik.yml build
             ;;
         caddy)
-            docker compose -f docker-compose.yml -f docker-compose.caddy.yml build --no-cache
+            docker compose -f docker-compose.yml -f docker-compose.caddy.yml build
             ;;
         none)
-            docker compose -f docker-compose.yml -f docker-compose.external-proxy.yml build --no-cache
+            docker compose -f docker-compose.yml -f docker-compose.external-proxy.yml build
             ;;
     esac
 
@@ -1289,9 +1289,9 @@ build_and_start() {
     log_info "Pushing database schema..."
     docker compose run --rm api sh -c "cd /app/apps/api && /app/node_modules/.bin/prisma db push --skip-generate"
 
-    # Seed admin user
+    # Seed admin user using tsx (runs TypeScript directly)
     log_info "Creating admin user..."
-    docker compose run --rm api sh -c "cd /app/apps/api && node prisma/seed.js"
+    docker compose run --rm api sh -c "cd /app/apps/api && tsx prisma/seed.ts"
 
     log_success "Database initialized"
 }
