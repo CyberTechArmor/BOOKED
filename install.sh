@@ -91,7 +91,8 @@ generate_password() {
 # Generate secure random string (alphanumeric only)
 generate_secret() {
     local length=${1:-64}
-    openssl rand -base64 48 | tr -dc 'a-zA-Z0-9' | head -c "$length"
+    # Use 96 bytes to ensure enough characters remain after filtering out +, /, =
+    openssl rand -base64 96 | tr -dc 'a-zA-Z0-9' | head -c "$length"
 }
 
 # Check if command exists
