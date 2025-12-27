@@ -75,11 +75,19 @@ export async function eventTypeRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const input = validateBody(createEventTypeSchema, request.body);
-    const eventType = await createEventType(
-      input,
-      request.user.id,
-      request.organization.id
-    );
+
+    let eventType;
+    try {
+      eventType = await createEventType(
+        input,
+        request.user.id,
+        request.organization.id
+      );
+    } catch (err) {
+      // Log the actual error for debugging
+      console.error('Event type creation error:', err);
+      throw err;
+    }
 
     return reply.status(201).send({
       success: true,
@@ -96,7 +104,15 @@ export async function eventTypeRoutes(app: FastifyInstance): Promise<void> {
     preHandler: [authenticate, requirePermission('event-types:write')],
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     const input = validateBody(updateEventTypeSchema, request.body);
-    const eventType = await updateEventType(request.params.id, input);
+
+    let eventType;
+    try {
+      eventType = await updateEventType(request.params.id, input);
+    } catch (err) {
+      // Log the actual error for debugging
+      console.error('Event type update error:', err);
+      throw err;
+    }
 
     return reply.send({
       success: true,

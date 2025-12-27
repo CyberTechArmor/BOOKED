@@ -8,7 +8,8 @@ const TENANT_SCOPED_MODELS = [
   'ApiKey',
   'AuditLog',
   'NotificationTemplate',
-  'BookingAuditLog',
+  // Note: BookingAuditLog is NOT included here because it doesn't have
+  // an organizationId field - it gets tenant scope through its Booking relation
 ];
 
 // Using 'any' for Prisma middleware compatibility - the actual types are checked at runtime
