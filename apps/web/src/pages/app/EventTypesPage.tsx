@@ -2,16 +2,26 @@ import { useEffect, useState } from 'react';
 import { useEventTypeStore, EventType, CreateEventTypeInput, AssignmentType, LocationType } from '@/stores/eventTypes';
 
 const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120];
-const ASSIGNMENT_TYPES: { value: AssignmentType; label: string }[] = [
-  { value: 'SINGLE', label: 'Single Host' },
-  { value: 'ROUND_ROBIN', label: 'Round Robin' },
-  { value: 'COLLECTIVE', label: 'Collective' },
-];
 const LOCATION_TYPES: { value: LocationType; label: string }[] = [
-  { value: 'MEET', label: 'Google Meet' },
+  { value: 'MEET', label: 'Video Call' },
   { value: 'PHONE', label: 'Phone Call' },
   { value: 'IN_PERSON', label: 'In Person' },
   { value: 'CUSTOM', label: 'Custom Location' },
+];
+
+const COLOR_SWATCHES = [
+  '#0066FF', // Primary blue
+  '#3B82F6', // Blue
+  '#6366F1', // Indigo
+  '#8B5CF6', // Purple
+  '#EC4899', // Pink
+  '#EF4444', // Red
+  '#F97316', // Orange
+  '#F59E0B', // Amber
+  '#10B981', // Emerald
+  '#14B8A6', // Teal
+  '#06B6D4', // Cyan
+  '#6B7280', // Gray
 ];
 
 interface EventTypeFormData {
@@ -195,170 +205,171 @@ export default function EventTypesPage() {
         {/* Create/Edit Event Type Modal */}
         {showForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto py-8">
-            <div className="bg-white rounded-lg p-6 w-full max-w-lg mx-4 my-auto">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
-                {editingEventType ? 'Edit Event Type' : 'Create Event Type'}
-              </h2>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 my-auto">
+              {/* Modal Header */}
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  {editingEventType ? 'Edit Event Type' : 'Create Event Type'}
+                </h2>
+              </div>
 
-              {formError && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
-                  {formError}
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="label">Title *</label>
-                  <input
-                    type="text"
-                    className="input"
-                    value={formData.title}
-                    onChange={(e) => handleTitleChange(e.target.value)}
-                    placeholder="e.g., 30 Minute Meeting"
-                  />
-                </div>
-
-                <div>
-                  <label className="label">Slug *</label>
-                  <input
-                    type="text"
-                    className="input"
-                    value={formData.slug}
-                    onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                    placeholder="e.g., 30-minute-meeting"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">URL-friendly identifier</p>
-                </div>
-
-                <div>
-                  <label className="label">Description</label>
-                  <textarea
-                    className="input"
-                    rows={3}
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Describe this event type..."
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="label">Duration</label>
-                    <select
-                      className="input"
-                      value={formData.durationMinutes}
-                      onChange={(e) => setFormData({ ...formData, durationMinutes: parseInt(e.target.value) })}
-                    >
-                      {DURATION_OPTIONS.map((d) => (
-                        <option key={d} value={d}>
-                          {d} minutes
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">Color</label>
-                    <input
-                      type="color"
-                      className="input h-10"
-                      value={formData.color}
-                      onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="label">Assignment Type</label>
-                    <select
-                      className="input"
-                      value={formData.assignmentType}
-                      onChange={(e) => setFormData({ ...formData, assignmentType: e.target.value as AssignmentType })}
-                    >
-                      {ASSIGNMENT_TYPES.map((at) => (
-                        <option key={at.value} value={at.value}>
-                          {at.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="label">Location Type</label>
-                    <select
-                      className="input"
-                      value={formData.locationType}
-                      onChange={(e) => setFormData({ ...formData, locationType: e.target.value as LocationType })}
-                    >
-                      {LOCATION_TYPES.map((lt) => (
-                        <option key={lt.value} value={lt.value}>
-                          {lt.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {(formData.locationType === 'CUSTOM' || formData.locationType === 'IN_PERSON') && (
-                  <div>
-                    <label className="label">Location Details</label>
-                    <input
-                      type="text"
-                      className="input"
-                      value={formData.locationValue}
-                      onChange={(e) => setFormData({ ...formData, locationValue: e.target.value })}
-                      placeholder="Enter location details..."
-                    />
+              {/* Modal Body */}
+              <div className="px-6 py-5">
+                {formError && (
+                  <div className="mb-5 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                    {formError}
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2">
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Title *</label>
                     <input
-                      type="checkbox"
-                      checked={formData.isActive}
-                      onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                      className="rounded border-gray-300"
+                      type="text"
+                      className="input"
+                      value={formData.title}
+                      onChange={(e) => handleTitleChange(e.target.value)}
+                      placeholder="e.g., 30 Minute Meeting"
                     />
-                    <span className="text-sm text-gray-700">Active (can be booked)</span>
-                  </label>
+                  </div>
 
-                  <label className="flex items-center gap-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Slug *</label>
                     <input
-                      type="checkbox"
-                      checked={formData.isPublic}
-                      onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked })}
-                      className="rounded border-gray-300"
+                      type="text"
+                      className="input"
+                      value={formData.slug}
+                      onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                      placeholder="e.g., 30-minute-meeting"
                     />
-                    <span className="text-sm text-gray-700">Public (visible to everyone)</span>
-                  </label>
+                    <p className="text-xs text-gray-500 mt-1.5">URL-friendly identifier for your booking link</p>
+                  </div>
 
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={formData.requiresConfirmation}
-                      onChange={(e) => setFormData({ ...formData, requiresConfirmation: e.target.checked })}
-                      className="rounded border-gray-300"
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
+                    <textarea
+                      className="input resize-none"
+                      rows={2}
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      placeholder="Brief description of this meeting type..."
                     />
-                    <span className="text-sm text-gray-700">Requires confirmation</span>
-                  </label>
-                </div>
+                  </div>
 
-                <div className="flex gap-3 pt-4">
-                  <button type="submit" className="btn-primary flex-1">
-                    {editingEventType ? 'Save Changes' : 'Create Event Type'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowForm(false);
-                      setEditingEventType(null);
-                    }}
-                    className="btn-outline"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Duration</label>
+                      <select
+                        className="input"
+                        value={formData.durationMinutes}
+                        onChange={(e) => setFormData({ ...formData, durationMinutes: parseInt(e.target.value) })}
+                      >
+                        {DURATION_OPTIONS.map((d) => (
+                          <option key={d} value={d}>
+                            {d} minutes
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Location</label>
+                      <select
+                        className="input"
+                        value={formData.locationType}
+                        onChange={(e) => setFormData({ ...formData, locationType: e.target.value as LocationType })}
+                      >
+                        {LOCATION_TYPES.map((lt) => (
+                          <option key={lt.value} value={lt.value}>
+                            {lt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {(formData.locationType === 'CUSTOM' || formData.locationType === 'IN_PERSON') && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Location Details</label>
+                      <input
+                        type="text"
+                        className="input"
+                        value={formData.locationValue}
+                        onChange={(e) => setFormData({ ...formData, locationValue: e.target.value })}
+                        placeholder="Enter address or meeting details..."
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Color</label>
+                    <div className="flex flex-wrap gap-2">
+                      {COLOR_SWATCHES.map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, color })}
+                          className={`w-8 h-8 rounded-full transition-all ${
+                            formData.color === color
+                              ? 'ring-2 ring-offset-2 ring-gray-900 scale-110'
+                              : 'hover:scale-110'
+                          }`}
+                          style={{ backgroundColor: color }}
+                          title={color}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 space-y-3">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.isActive}
+                        onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-300 text-[var(--primary)] focus:ring-[var(--primary)]"
+                      />
+                      <span className="text-sm text-gray-700">Active (can be booked)</span>
+                    </label>
+
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.isPublic}
+                        onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-300 text-[var(--primary)] focus:ring-[var(--primary)]"
+                      />
+                      <span className="text-sm text-gray-700">Public (visible to everyone)</span>
+                    </label>
+
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.requiresConfirmation}
+                        onChange={(e) => setFormData({ ...formData, requiresConfirmation: e.target.checked })}
+                        className="w-4 h-4 rounded border-gray-300 text-[var(--primary)] focus:ring-[var(--primary)]"
+                      />
+                      <span className="text-sm text-gray-700">Requires confirmation</span>
+                    </label>
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="flex gap-3 pt-4 border-t border-gray-200 mt-6">
+                    <button type="submit" className="btn-primary flex-1">
+                      {editingEventType ? 'Save Changes' : 'Create Event Type'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowForm(false);
+                        setEditingEventType(null);
+                      }}
+                      className="btn-outline px-6"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
         )}
