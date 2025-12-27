@@ -1,6 +1,20 @@
 import { PrismaClient } from '@prisma/client';
-import { OrgRole, UserStatus } from '../src/types/prisma.js';
 import { hash } from '@node-rs/argon2';
+
+// Inline types to avoid import path issues in Docker
+// These must match the values in ../src/types/prisma.ts
+const OrgRole = {
+  OWNER: 'OWNER',
+  ADMIN: 'ADMIN',
+  MEMBER: 'MEMBER',
+  READONLY: 'READONLY',
+} as const;
+
+const UserStatus = {
+  ACTIVE: 'ACTIVE',
+  SUSPENDED: 'SUSPENDED',
+  PENDING_VERIFICATION: 'PENDING_VERIFICATION',
+} as const;
 
 const prisma = new PrismaClient();
 
