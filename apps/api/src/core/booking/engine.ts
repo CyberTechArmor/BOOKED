@@ -54,7 +54,7 @@ import { BookingStatus, BookingSource, AttendeeResponse } from '../../types/pris
 import { getPrismaClient } from '../../infrastructure/database/client.js';
 import { getRedisClient } from '../../infrastructure/cache/redis.js';
 import { getNotificationQueue, getWebhookQueue } from '../../infrastructure/queue/queues.js';
-import { getContext } from '../../common/utils/context.js';
+import { getContext, getContextSafe } from '../../common/utils/context.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../common/utils/errors.js';
 import { generateSecureToken } from '../../common/utils/encryption.js';
 import { nanoid } from 'nanoid';
@@ -262,8 +262,12 @@ async function generateMeetLink(booking: CreateBookingData): Promise<string | nu
  */
 export async function createBooking(data: CreateBookingData): Promise<BookingResult> {
   const db = getPrismaClient();
-  const ctx = getContext();
-  let lockValue: string | undefined;
+  const ctx = getContextSafe() ?? {
+    requestId: nanoid(),
+    ipAddress: 'unknown',
+    userAgent: 'unknown',
+  };
+  let lockValue: string | null = null;
 
   try {
     // 1. Acquire lock on the time slot
@@ -480,7 +484,11 @@ export async function cancelBooking(
   cancelledBy: 'HOST' | 'ATTENDEE' | 'SYSTEM' = 'HOST'
 ): Promise<BookingResult> {
   const db = getPrismaClient();
-  const ctx = getContext();
+  const ctx = getContextSafe() ?? {
+    requestId: nanoid(),
+    ipAddress: 'unknown',
+    userAgent: 'unknown',
+  };
 
   const result = await db.$transaction(async (tx) => {
     const booking = await tx.booking.findUnique({
@@ -609,7 +617,11 @@ export async function cancelBooking(
  */
 export async function confirmBooking(bookingId: string): Promise<BookingResult> {
   const db = getPrismaClient();
-  const ctx = getContext();
+  const ctx = getContextSafe() ?? {
+    requestId: nanoid(),
+    ipAddress: 'unknown',
+    userAgent: 'unknown',
+  };
 
   const result = await db.$transaction(async (tx) => {
     const booking = await tx.booking.findUnique({
