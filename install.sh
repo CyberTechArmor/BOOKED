@@ -1575,6 +1575,81 @@ build_and_start() {
     docker compose run --rm api sh -c "cd /app && tsx apps/api/prisma/seed.ts"
 
     log_success "Database initialized"
+
+    # Start all services including proxy
+    log_info "Starting all services..."
+
+    case $PROXY_TYPE in
+        nginx)
+            # For nginx, we need to obtain SSL certificate first
+            log_info "Initializing Let's Encrypt certificates..."
+
+            # Create directories
+            mkdir -p ./certbot/conf ./certbot/www
+
+            # Download recommended TLS parameters
+            if [ ! -e "./certbot/conf/options-ssl-nginx.conf" ]; then
+                curl -s https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf > ./certbot/conf/options-ssl-nginx.conf
+            fi
+
+            if [ ! -e "./certbot/conf/ssl-dhparams.pem" ]; then
+                curl -s https://raw.githubusercontent.com/certbot/certbot/master/certbot/certbot/ssl-dhparams.pem > ./certbot/conf/ssl-dhparams.pem
+            fi
+
+            # Create dummy certificate for nginx to start
+            log_info "Creating temporary self-signed certificate..."
+            mkdir -p ./certbot/conf/live/$DOMAIN
+            openssl req -x509 -nodes -newkey rsa:4096 -days 1 \
+                -keyout ./certbot/conf/live/$DOMAIN/privkey.pem \
+                -out ./certbot/conf/live/$DOMAIN/fullchain.pem \
+                -subj '/CN=localhost' 2>/dev/null
+            cp ./certbot/conf/live/$DOMAIN/fullchain.pem ./certbot/conf/live/$DOMAIN/chain.pem
+
+            # Start all services including nginx with dummy cert
+            log_info "Starting nginx with temporary certificate..."
+            docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d
+
+            # Wait for nginx to be ready
+            sleep 5
+
+            # Delete dummy certificate
+            log_info "Removing temporary certificate..."
+            rm -rf ./certbot/conf/live/$DOMAIN
+            rm -rf ./certbot/conf/archive/$DOMAIN
+            rm -rf ./certbot/conf/renewal/$DOMAIN.conf
+
+            # Request real certificate from Let's Encrypt
+            log_info "Requesting Let's Encrypt certificate for $DOMAIN..."
+            docker compose -f docker-compose.yml -f docker-compose.nginx.yml run --rm certbot certonly \
+                --webroot \
+                --webroot-path=/var/www/certbot \
+                --email $LETSENCRYPT_EMAIL \
+                --agree-tos \
+                --no-eff-email \
+                --force-renewal \
+                -d $DOMAIN
+
+            # Reload nginx with real certificate
+            log_info "Reloading nginx with Let's Encrypt certificate..."
+            docker compose -f docker-compose.yml -f docker-compose.nginx.yml exec -T nginx nginx -s reload
+
+            log_success "SSL certificate obtained and nginx configured"
+            ;;
+        traefik)
+            docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d
+            log_success "Traefik started (SSL will be obtained automatically)"
+            ;;
+        caddy)
+            docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d
+            log_success "Caddy started (SSL will be obtained automatically)"
+            ;;
+        none)
+            docker compose -f docker-compose.yml -f docker-compose.external-proxy.yml up -d
+            log_success "Services started (configure your external proxy for SSL)"
+            ;;
+    esac
+
+    log_success "All services started successfully!"
 }
 
 # Print completion message
@@ -1595,26 +1670,21 @@ print_completion() {
     echo -e "  ${RED}⚠️  SAVE THESE CREDENTIALS - They will not be shown again!${NC}"
     echo ""
 
+    echo -e "  ${GREEN}✓ All services are running!${NC}"
+    echo ""
+
     if [[ "$PROXY_TYPE" == "nginx" ]]; then
-        echo -e "  ${YELLOW}Next Steps:${NC}"
-        echo "    1. Initialize SSL certificates:"
-        echo "       cd $INSTALL_DIR && ./init-letsencrypt.sh"
+        echo -e "  ${GREEN}✓ SSL certificate obtained from Let's Encrypt${NC}"
+        echo -e "  ${GREEN}✓ HTTPS is enforced (HTTP redirects to HTTPS)${NC}"
         echo ""
-        echo "    2. Start all services:"
-        echo "       ./start.sh"
-        echo ""
-    elif [[ "$PROXY_TYPE" != "none" ]]; then
-        echo -e "  ${YELLOW}Next Steps:${NC}"
-        echo "    Start all services:"
-        echo "       cd $INSTALL_DIR && ./start.sh"
+    elif [[ "$PROXY_TYPE" == "traefik" ]] || [[ "$PROXY_TYPE" == "caddy" ]]; then
+        echo -e "  ${GREEN}✓ SSL certificate will be obtained automatically${NC}"
+        echo -e "  ${GREEN}✓ HTTPS is enforced (HTTP redirects to HTTPS)${NC}"
         echo ""
     else
         echo -e "  ${YELLOW}Next Steps:${NC}"
-        echo "    1. Configure your reverse proxy using examples in:"
+        echo "    Configure your reverse proxy using examples in:"
         echo "       $INSTALL_DIR/proxy/examples/"
-        echo ""
-        echo "    2. Start BOOKED services:"
-        echo "       cd $INSTALL_DIR && ./start.sh"
         echo ""
     fi
 
