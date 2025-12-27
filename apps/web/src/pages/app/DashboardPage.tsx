@@ -1,58 +1,77 @@
-import { useAuthStore } from '@/stores/auth';
+import { useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { useBookingStore } from '@/stores/bookings';
+import { useEventTypeStore } from '@/stores/eventTypes';
+import { useScheduleStore } from '@/stores/schedules';
 
-export default function DashboardPage() {
-  const { user, organization, logout } = useAuthStore();
+export default function DashboardPage(): JSX.Element {
+  const { bookings, fetchBookings } = useBookingStore();
+  const { eventTypes, fetchEventTypes } = useEventTypeStore();
+  const { schedules, fetchSchedules } = useScheduleStore();
+
+  useEffect(() => {
+    fetchBookings();
+    fetchEventTypes();
+    fetchSchedules();
+  }, [fetchBookings, fetchEventTypes, fetchSchedules]);
+
+  const upcomingBookings = bookings.filter(
+    (b) =>
+      (b.status === 'PENDING' || b.status === 'CONFIRMED') &&
+      new Date(b.startTime) > new Date()
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-bold text-gray-900">BOOKED</h1>
-              {organization && (
-                <span className="ml-4 text-sm text-gray-500">{organization.name}</span>
-              )}
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-700">{user?.name}</span>
-              <button onClick={logout} className="btn-outline text-sm">
-                Logout
-              </button>
-            </div>
-          </div>
+    <div className="p-6 lg:p-8">
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Link to="/app/bookings" className="card hover:shadow-md transition-shadow">
+          <h3 className="text-lg font-medium text-gray-900">Upcoming Bookings</h3>
+          <p className="text-3xl font-bold text-[var(--primary)] mt-2">
+            {upcomingBookings.length}
+          </p>
+          <span className="text-sm text-[var(--primary)] mt-4 inline-block">
+            View all bookings →
+          </span>
+        </Link>
+
+        <Link to="/app/event-types" className="card hover:shadow-md transition-shadow">
+          <h3 className="text-lg font-medium text-gray-900">Event Types</h3>
+          <p className="text-3xl font-bold text-[var(--primary)] mt-2">
+            {eventTypes.length}
+          </p>
+          <span className="text-sm text-[var(--primary)] mt-4 inline-block">
+            Manage event types →
+          </span>
+        </Link>
+
+        <Link to="/app/availability" className="card hover:shadow-md transition-shadow">
+          <h3 className="text-lg font-medium text-gray-900">Availability</h3>
+          <p className="text-3xl font-bold text-[var(--primary)] mt-2">
+            {schedules.length}
+          </p>
+          <p className="text-sm text-gray-500">
+            {schedules.length === 1 ? '1 schedule' : `${schedules.length} schedules`}
+          </p>
+          <span className="text-sm text-[var(--primary)] mt-4 inline-block">
+            Set availability →
+          </span>
+        </Link>
+      </div>
+
+      {/* Quick actions */}
+      <div className="mt-8">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
+        <div className="flex flex-wrap gap-3">
+          <Link to="/app/event-types" className="btn-primary">
+            Create Event Type
+          </Link>
+          <Link to="/app/availability" className="btn-outline">
+            Set Availability
+          </Link>
         </div>
-      </nav>
-
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="card">
-            <h3 className="text-lg font-medium text-gray-900">Upcoming Bookings</h3>
-            <p className="text-3xl font-bold text-[var(--primary)] mt-2">0</p>
-            <a href="/app/bookings" className="text-sm text-[var(--primary)] hover:underline mt-4 inline-block">
-              View all bookings →
-            </a>
-          </div>
-
-          <div className="card">
-            <h3 className="text-lg font-medium text-gray-900">Event Types</h3>
-            <p className="text-3xl font-bold text-[var(--primary)] mt-2">0</p>
-            <a href="/app/event-types" className="text-sm text-[var(--primary)] hover:underline mt-4 inline-block">
-              Manage event types →
-            </a>
-          </div>
-
-          <div className="card">
-            <h3 className="text-lg font-medium text-gray-900">Availability</h3>
-            <p className="text-sm text-gray-500 mt-2">Configure your availability</p>
-            <a href="/app/availability" className="text-sm text-[var(--primary)] hover:underline mt-4 inline-block">
-              Set availability →
-            </a>
-          </div>
-        </div>
-      </main>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/auth';
+import { AppLayout } from './components/layout';
 
 // Lazy load pages
 import { lazy, Suspense, useEffect } from 'react';
@@ -14,15 +15,19 @@ const SettingsPage = lazy(() => import('./pages/app/SettingsPage'));
 const PublicBookingPage = lazy(() => import('./pages/public/BookingPage'));
 const BookingConfirmationPage = lazy(() => import('./pages/public/BookingConfirmationPage'));
 
-function LoadingSpinner() {
+function LoadingSpinner(): JSX.Element {
   return (
     <div className="flex items-center justify-center min-h-screen">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary)]"></div>
     </div>
   );
 }
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+
+function ProtectedRoute({ children }: ProtectedRouteProps): JSX.Element {
   const { isAuthenticated, isLoading } = useAuthStore();
 
   if (isLoading) {
@@ -33,10 +38,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  return <AppLayout>{children}</AppLayout>;
 }
 
-function App() {
+function App(): JSX.Element {
   const { checkAuth } = useAuthStore();
 
   // Check authentication status on app mount

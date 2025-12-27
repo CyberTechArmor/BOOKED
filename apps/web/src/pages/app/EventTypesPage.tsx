@@ -167,7 +167,7 @@ export default function EventTypesPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8">
+      <div className="p-6 lg:p-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Event Types</h1>
         <div className="card">
           <p className="text-gray-500">Loading event types...</p>
@@ -177,7 +177,7 @@ export default function EventTypesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="p-6 lg:p-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Event Types</h1>
