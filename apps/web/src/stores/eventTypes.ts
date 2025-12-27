@@ -31,6 +31,7 @@ export interface EventType {
   bufferAfter?: number;
   minimumNotice?: number;
   maxBookingsPerDay?: number;
+  maxBookingsPerWeek?: number;
   organizationId: string;
   createdAt: string;
   updatedAt: string;
@@ -53,6 +54,7 @@ export interface CreateEventTypeInput {
   bufferAfter?: number;
   minimumNotice?: number;
   maxBookingsPerDay?: number;
+  maxBookingsPerWeek?: number;
 }
 
 // Helper to get organization headers

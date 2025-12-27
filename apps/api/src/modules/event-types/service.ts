@@ -24,6 +24,7 @@ export interface EventType {
   bufferAfter: number | null;
   minimumNotice: number | null;
   maxBookingsPerDay: number | null;
+  maxBookingsPerWeek: number | null;
   hosts: EventTypeHost[];
   createdAt: Date;
   updatedAt: Date;
@@ -99,6 +100,7 @@ export async function listEventTypes(organizationId: string): Promise<EventType[
     bufferAfter: et.bufferAfter,
     minimumNotice: et.minimumNotice,
     maxBookingsPerDay: et.maxBookingsPerDay,
+    maxBookingsPerWeek: (et as { maxBookingsPerWeek?: number | null }).maxBookingsPerWeek ?? null,
     hosts: et.hosts.map((h) => {
       const user = userMap.get(h.userId);
       return {
@@ -164,6 +166,7 @@ export async function getEventTypeById(
     bufferAfter: eventType.bufferAfter,
     minimumNotice: eventType.minimumNotice,
     maxBookingsPerDay: eventType.maxBookingsPerDay,
+    maxBookingsPerWeek: (eventType as { maxBookingsPerWeek?: number | null }).maxBookingsPerWeek ?? null,
     hosts: eventType.hosts.map((h) => {
       const user = userMap.get(h.userId);
       return {
@@ -223,6 +226,7 @@ export async function createEventType(
       bufferAfter: input.bufferAfter,
       minimumNotice: input.minimumNotice,
       maxBookingsPerDay: input.maxBookingsPerDay,
+      maxBookingsPerWeek: (input as { maxBookingsPerWeek?: number }).maxBookingsPerWeek,
       hosts: input.hostUserIds
         ? {
             create: input.hostUserIds.map((hostUserId, index) => ({
@@ -307,6 +311,7 @@ export async function updateEventType(
       bufferAfter: input.bufferAfter,
       minimumNotice: input.minimumNotice,
       maxBookingsPerDay: input.maxBookingsPerDay,
+      maxBookingsPerWeek: (input as { maxBookingsPerWeek?: number }).maxBookingsPerWeek,
     },
   });
 
