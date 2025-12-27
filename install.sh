@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 # Configuration
 REPO_URL="https://github.com/CyberTechArmor/BOOKED.git"
 INSTALL_DIR="/opt/booked"
-BRANCH="claude/fix-build-config-8AYNJ"
+BRANCH="main"
 
 # Command line options
 NO_CACHE=false
