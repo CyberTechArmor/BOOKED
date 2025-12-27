@@ -88,51 +88,22 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=api-builder /app/apps/api/dist ./apps/api/dist
 COPY --from=api-builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=api-builder /app/apps/api/src/types ./apps/api/src/types
-# Copy api's node_modules from api-builder (includes .prisma, @prisma, @node-rs if not hoisted)
-COPY --from=api-builder /app/apps/api/node_modules ./apps/api/node_modules
 
-# Ensure @prisma/client and @node-rs/argon2 are available for seed script
-# tsx resolves modules relative to file location, so they must be in apps/api/node_modules
-# IMPORTANT: Only copy from root if NOT already present - the api-builder version is correctly
-# configured to find .prisma/client in apps/api/node_modules, root version looks at wrong path
-RUN set -e && \
-    # First, ensure .prisma/client exists - copy from root if needed (when hoisted)
-    if [ ! -d /app/apps/api/node_modules/.prisma/client ]; then \
-      if [ -d /app/node_modules/.prisma/client ]; then \
-        echo "Copying .prisma/client from root (was hoisted)..." && \
-        mkdir -p /app/apps/api/node_modules/.prisma && \
-        cp -r /app/node_modules/.prisma/client /app/apps/api/node_modules/.prisma/; \
-      else \
-        echo "ERROR: .prisma/client not found in either location - prisma generate may have failed" && exit 1; \
-      fi; \
-    else \
-      echo ".prisma/client already exists in apps/api/node_modules"; \
+# Regenerate Prisma client in production image to ensure proper initialization
+# This is more reliable than copying generated files between stages
+RUN cd /app/apps/api && /app/node_modules/.bin/prisma generate
+
+# Copy @node-rs/argon2 to api's node_modules for seed script (tsx resolves relative to file)
+RUN mkdir -p /app/apps/api/node_modules/@node-rs && \
+    if [ -d /app/node_modules/@node-rs/argon2 ]; then \
+      cp -r /app/node_modules/@node-rs/argon2 /app/apps/api/node_modules/@node-rs/; \
     fi && \
-    # Check if @prisma/client exists, copy from root only if missing
-    if [ ! -d /app/apps/api/node_modules/@prisma/client ]; then \
-      if [ -d /app/node_modules/@prisma/client ]; then \
-        echo "Copying @prisma/client from root (was hoisted)..." && \
-        mkdir -p /app/apps/api/node_modules/@prisma && \
-        cp -r /app/node_modules/@prisma/client /app/apps/api/node_modules/@prisma/; \
-      else \
-        echo "ERROR: @prisma/client not found in either location" && exit 1; \
-      fi; \
-    else \
-      echo "@prisma/client already exists in apps/api/node_modules"; \
-    fi && \
-    # Check if @node-rs/argon2 exists, copy from root only if missing
-    if [ ! -d /app/apps/api/node_modules/@node-rs/argon2 ]; then \
-      if [ -d /app/node_modules/@node-rs/argon2 ]; then \
-        echo "Copying @node-rs/argon2 from root (was hoisted)..." && \
-        mkdir -p /app/apps/api/node_modules/@node-rs && \
-        cp -r /app/node_modules/@node-rs/argon2 /app/apps/api/node_modules/@node-rs/; \
-      else \
-        echo "ERROR: @node-rs/argon2 not found in either location" && exit 1; \
-      fi; \
-    else \
-      echo "@node-rs/argon2 already exists in apps/api/node_modules"; \
-    fi && \
-    echo "All modules verified successfully"
+    # Create symlinks for @prisma so tsx can find them
+    mkdir -p /app/apps/api/node_modules/@prisma && \
+    ln -sf /app/node_modules/@prisma/client /app/apps/api/node_modules/@prisma/client && \
+    mkdir -p /app/apps/api/node_modules/.prisma && \
+    ln -sf /app/node_modules/.prisma/client /app/apps/api/node_modules/.prisma/client && \
+    echo "Prisma client regenerated and modules linked successfully"
 
 # Set ownership
 RUN chown -R booked:nodejs /app
