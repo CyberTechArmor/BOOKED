@@ -250,10 +250,11 @@ model EventType {
   customFields    Json     @default("[]")  // Additional booking form fields
 
   // Constraints (override user schedule)
-  bufferBefore      Int?
-  bufferAfter       Int?
-  minimumNotice     Int?
-  maxBookingsPerDay Int?
+  bufferBefore       Int?
+  bufferAfter        Int?
+  minimumNotice      Int?     // Minimum notice in hours
+  maxBookingsPerDay  Int?
+  maxBookingsPerWeek Int?
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

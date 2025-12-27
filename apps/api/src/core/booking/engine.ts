@@ -126,23 +126,35 @@ type BookingWithRelations = Booking & {
 
 /**
  * Acquire a distributed lock on a time slot
+ * Returns null if Redis is unavailable (booking will proceed without lock)
  */
 export async function acquireSlotLock(
   hostId: string,
   startTime: Date,
   endTime: Date
-): Promise<string> {
-  const redis = getRedisClient();
-  const lockKey = `slot_lock:${hostId}:${startTime.toISOString()}:${endTime.toISOString()}`;
-  const lockValue = nanoid();
+): Promise<string | null> {
+  try {
+    const redis = getRedisClient();
+    const lockKey = `slot_lock:${hostId}:${startTime.toISOString()}:${endTime.toISOString()}`;
+    const lockValue = nanoid();
 
-  const acquired = await redis.set(lockKey, lockValue, 'PX', SLOT_LOCK_TTL_MS, 'NX');
+    const acquired = await redis.set(lockKey, lockValue, 'PX', SLOT_LOCK_TTL_MS, 'NX');
 
-  if (!acquired) {
-    throw new ConflictError('Time slot is currently being booked by another user. Please try again.');
+    if (!acquired) {
+      throw new ConflictError('Time slot is currently being booked by another user. Please try again.');
+    }
+
+    return lockValue;
+  } catch (error) {
+    // If it's a conflict error, rethrow it
+    if (error instanceof ConflictError) {
+      throw error;
+    }
+    // For Redis connection errors, log and continue without lock
+    // The database transaction will still prevent double-booking
+    console.warn('Failed to acquire slot lock, proceeding without lock:', error);
+    return null;
   }
-
-  return lockValue;
 }
 
 /**
@@ -152,21 +164,30 @@ export async function releaseSlotLock(
   hostId: string,
   startTime: Date,
   endTime: Date,
-  lockValue: string
+  lockValue: string | null
 ): Promise<void> {
-  const redis = getRedisClient();
-  const lockKey = `slot_lock:${hostId}:${startTime.toISOString()}:${endTime.toISOString()}`;
+  if (!lockValue) {
+    return; // No lock was acquired
+  }
 
-  // Only delete if we still own the lock
-  const script = `
-    if redis.call("get", KEYS[1]) == ARGV[1] then
-      return redis.call("del", KEYS[1])
-    else
-      return 0
-    end
-  `;
+  try {
+    const redis = getRedisClient();
+    const lockKey = `slot_lock:${hostId}:${startTime.toISOString()}:${endTime.toISOString()}`;
 
-  await redis.eval(script, 1, lockKey, lockValue);
+    // Only delete if we still own the lock
+    const script = `
+      if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("del", KEYS[1])
+      else
+        return 0
+      end
+    `;
+
+    await redis.eval(script, 1, lockKey, lockValue);
+  } catch (error) {
+    // Log but don't fail - lock will expire automatically
+    console.warn('Failed to release slot lock:', error);
+  }
 }
 
 /**
@@ -368,40 +389,52 @@ export async function createBooking(data: CreateBookingData): Promise<BookingRes
       return booking as unknown as BookingWithRelations;
     });
 
-    // 3. Queue notifications (outside transaction)
-    const notificationQueue = getNotificationQueue();
-    await notificationQueue.add('booking-created', {
-      type: 'BOOKING_CREATED',
-      bookingId: result.id,
-      recipients: [
-        { type: 'host', userId: result.hostId },
-        { type: 'attendee', email: data.attendee.email },
-      ],
-    });
+    // 3. Queue notifications (outside transaction) - don't fail booking if queue fails
+    try {
+      const notificationQueue = getNotificationQueue();
+      await notificationQueue.add('booking-created', {
+        type: 'BOOKING_CREATED',
+        bookingId: result.id,
+        recipients: [
+          { type: 'host', userId: result.hostId },
+          { type: 'attendee', email: data.attendee.email },
+        ],
+      });
+    } catch (error) {
+      console.warn('Failed to queue booking notification:', error);
+    }
 
-    // 4. Queue webhook dispatch
-    const webhookQueue = getWebhookQueue();
-    await webhookQueue.add('booking-created', {
-      webhookId: '', // Will be resolved by worker
-      event: 'booking.created',
-      data: {
-        booking: {
-          id: result.id,
-          uid: result.uid,
-          status: result.status,
-          startTime: result.startTime.toISOString(),
-          endTime: result.endTime.toISOString(),
-          host: result.host,
-          attendees: result.attendees,
-          eventType: result.eventType,
-          meetingUrl: result.meetingUrl,
+    // 4. Queue webhook dispatch - don't fail booking if queue fails
+    try {
+      const webhookQueue = getWebhookQueue();
+      await webhookQueue.add('booking-created', {
+        webhookId: '', // Will be resolved by worker
+        event: 'booking.created',
+        data: {
+          booking: {
+            id: result.id,
+            uid: result.uid,
+            status: result.status,
+            startTime: result.startTime.toISOString(),
+            endTime: result.endTime.toISOString(),
+            host: result.host,
+            attendees: result.attendees,
+            eventType: result.eventType,
+            meetingUrl: result.meetingUrl,
+          },
         },
-      },
-      deliveryId: nanoid(),
-    });
+        deliveryId: nanoid(),
+      });
+    } catch (error) {
+      console.warn('Failed to queue booking webhook:', error);
+    }
 
-    // Schedule reminders
-    await scheduleReminders(result.id, result.startTime);
+    // Schedule reminders - don't fail booking if queue fails
+    try {
+      await scheduleReminders(result.id, result.startTime);
+    } catch (error) {
+      console.warn('Failed to schedule booking reminders:', error);
+    }
 
     return {
       id: result.id,
@@ -499,36 +532,48 @@ export async function cancelBooking(
     return updated as unknown as BookingWithRelations;
   });
 
-  // Queue notifications
-  const notificationQueue = getNotificationQueue();
-  await notificationQueue.add('booking-cancelled', {
-    type: 'BOOKING_CANCELLED',
-    bookingId: result.id,
-    recipients: [
-      { type: 'host', userId: result.hostId },
-      ...result.attendees.map((a) => ({ type: 'attendee' as const, email: a.email })),
-    ],
-    data: { reason, cancelledBy },
-  });
+  // Queue notifications - don't fail cancellation if queue fails
+  try {
+    const notificationQueue = getNotificationQueue();
+    await notificationQueue.add('booking-cancelled', {
+      type: 'BOOKING_CANCELLED',
+      bookingId: result.id,
+      recipients: [
+        { type: 'host', userId: result.hostId },
+        ...result.attendees.map((a) => ({ type: 'attendee' as const, email: a.email })),
+      ],
+      data: { reason, cancelledBy },
+    });
+  } catch (error) {
+    console.warn('Failed to queue cancellation notification:', error);
+  }
 
-  // Queue webhook
-  const webhookQueue = getWebhookQueue();
-  await webhookQueue.add('booking-cancelled', {
-    webhookId: '',
-    event: 'booking.cancelled',
-    data: {
-      booking: {
-        id: result.id,
-        uid: result.uid,
-        cancelReason: reason,
-        cancelledBy,
+  // Queue webhook - don't fail cancellation if queue fails
+  try {
+    const webhookQueue = getWebhookQueue();
+    await webhookQueue.add('booking-cancelled', {
+      webhookId: '',
+      event: 'booking.cancelled',
+      data: {
+        booking: {
+          id: result.id,
+          uid: result.uid,
+          cancelReason: reason,
+          cancelledBy,
+        },
       },
-    },
-    deliveryId: nanoid(),
-  });
+      deliveryId: nanoid(),
+    });
+  } catch (error) {
+    console.warn('Failed to queue cancellation webhook:', error);
+  }
 
-  // Cancel scheduled reminders
-  await cancelReminders(bookingId);
+  // Cancel scheduled reminders - don't fail cancellation if queue fails
+  try {
+    await cancelReminders(bookingId);
+  } catch (error) {
+    console.warn('Failed to cancel reminders:', error);
+  }
 
   return {
     id: result.id,
@@ -602,16 +647,20 @@ export async function confirmBooking(bookingId: string): Promise<BookingResult> 
     return updated as unknown as BookingWithRelations;
   });
 
-  // Queue notification
-  const notificationQueue = getNotificationQueue();
-  await notificationQueue.add('booking-confirmed', {
-    type: 'BOOKING_CONFIRMED',
-    bookingId: result.id,
-    recipients: [
-      { type: 'host', userId: result.hostId },
-      ...result.attendees.map((a) => ({ type: 'attendee' as const, email: a.email })),
-    ],
-  });
+  // Queue notification - don't fail confirmation if queue fails
+  try {
+    const notificationQueue = getNotificationQueue();
+    await notificationQueue.add('booking-confirmed', {
+      type: 'BOOKING_CONFIRMED',
+      bookingId: result.id,
+      recipients: [
+        { type: 'host', userId: result.hostId },
+        ...result.attendees.map((a) => ({ type: 'attendee' as const, email: a.email })),
+      ],
+    });
+  } catch (error) {
+    console.warn('Failed to queue confirmation notification:', error);
+  }
 
   return {
     id: result.id,

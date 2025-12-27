@@ -26,6 +26,7 @@ export const createEventTypeSchema = z.object({
   bufferAfter: z.number().min(0).max(120).optional(),
   minimumNotice: z.number().min(0).max(720).optional(), // hours
   maxBookingsPerDay: z.number().min(1).max(100).optional(),
+  maxBookingsPerWeek: z.number().min(1).max(500).optional(),
   scheduleIds: z.array(z.string()).optional(),
   hostUserIds: z.array(z.string()).optional(),
 });
