@@ -80,7 +80,7 @@ export async function updateOrganization(
     where: { id: organizationId },
     data: {
       ...input,
-      settings: input.settings,
+      settings: input.settings as object | undefined,
     },
   });
 
