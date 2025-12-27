@@ -2,7 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/auth';
 
 // Lazy load pages
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/auth/RegisterPage'));
@@ -37,6 +37,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  const { checkAuth } = useAuthStore();
+
+  // Check authentication status on app mount
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
   return (
     <Suspense fallback={<LoadingSpinner />}>
       <Routes>
