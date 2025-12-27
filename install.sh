@@ -726,7 +726,7 @@ generate_env_file() {
     local db_password=$(generate_secret 32)
     local redis_password=$(generate_secret 32)
     local session_secret=$(generate_secret 64)
-    local encryption_key=$(generate_secret 32)
+    local encryption_key=$(generate_secret 64)
     local webhook_secret=$(generate_secret 32)
 
     cat > "$INSTALL_DIR/.env" << EOF
