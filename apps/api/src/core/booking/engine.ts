@@ -1,4 +1,52 @@
-import { Prisma, Booking, Attendee, User, EventType } from '@prisma/client';
+// Local type definitions to work around Prisma client generation issues
+// These mirror the Prisma model types needed for this module
+
+interface Booking {
+  id: string;
+  organizationId: string;
+  eventTypeId: string | null;
+  hostId: string;
+  startTime: Date;
+  endTime: Date;
+  timezone: string;
+  status: string;
+  title: string | null;
+  description: string | null;
+  meetingUrl: string | null;
+  customFieldResponses: unknown;
+  source: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface Attendee {
+  id: string;
+  bookingId: string;
+  email: string;
+  name: string;
+  phone: string | null;
+  userId: string | null;
+  responseStatus: string;
+}
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
+interface EventType {
+  id: string;
+  title: string;
+  slug: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-namespace
+namespace Prisma {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  export type TransactionClient = any;
+}
+
 import { BookingStatus, BookingSource, AttendeeResponse } from '../../types/prisma.js';
 import { getPrismaClient } from '../../infrastructure/database/client.js';
 import { getRedisClient } from '../../infrastructure/cache/redis.js';
@@ -258,7 +306,7 @@ export async function createBooking(data: CreateBookingData): Promise<BookingRes
           title: data.title,
           description: data.description,
           meetingUrl,
-          customFieldResponses: (data.customFieldResponses ?? {}) as Prisma.InputJsonValue,
+          customFieldResponses: data.customFieldResponses ?? {},
           source: data.source ?? (ctx.apiKeyId ? 'API' : 'WEB'),
           attendees: {
             create: {

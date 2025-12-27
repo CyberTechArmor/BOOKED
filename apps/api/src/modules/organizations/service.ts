@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+// Prisma import removed due to client generation issues
 import { OrgRole } from '../../types/prisma.js';
 import { getPrismaClient } from '../../infrastructure/database/client.js';
 import { getNotificationQueue } from '../../infrastructure/queue/queues.js';
@@ -80,7 +80,7 @@ export async function updateOrganization(
     where: { id: organizationId },
     data: {
       ...input,
-      settings: input.settings as Prisma.InputJsonValue | undefined,
+      settings: input.settings,
     },
   });
 

@@ -19,10 +19,10 @@ export default function SettingsPage() {
   // Organization form state
   const [orgForm, setOrgForm] = useState({
     name: '',
-    slug: '',
   });
   const [orgSaving, setOrgSaving] = useState(false);
   const [orgSuccess, setOrgSuccess] = useState(false);
+  const [orgError, setOrgError] = useState<string | null>(null);
 
   // Notification preferences
   const [notifications, setNotifications] = useState({
@@ -45,7 +45,6 @@ export default function SettingsPage() {
     if (organization) {
       setOrgForm({
         name: organization.name || '',
-        slug: organization.slug || '',
       });
     }
   }, [user, organization]);
@@ -67,12 +66,43 @@ export default function SettingsPage() {
     e.preventDefault();
     setOrgSaving(true);
     setOrgSuccess(false);
+    setOrgError(null);
 
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (organization?.slug) {
+        headers['X-Organization'] = organization.slug;
+      }
 
-    setOrgSaving(false);
-    setOrgSuccess(true);
-    setTimeout(() => setOrgSuccess(false), 3000);
+      const response = await fetch('/api/v1/organizations/current', {
+        method: 'PATCH',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify({ name: orgForm.name }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to update organization');
+      }
+
+      const { data } = await response.json();
+
+      // Update the organization in auth store
+      useAuthStore.getState().setOrganization({
+        ...organization!,
+        name: data.name,
+      });
+
+      setOrgSuccess(true);
+      setTimeout(() => setOrgSuccess(false), 3000);
+    } catch (error) {
+      setOrgError(error instanceof Error ? error.message : 'Failed to update organization');
+    } finally {
+      setOrgSaving(false);
+    }
   };
 
   const handleNotificationsSave = async (e: React.FormEvent) => {
@@ -235,6 +265,12 @@ export default function SettingsPage() {
             <h2 className="text-lg font-semibold text-gray-900 mb-6">Organization Settings</h2>
 
             <form onSubmit={handleOrgSave} className="space-y-5">
+              {orgError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  {orgError}
+                </div>
+              )}
+
               <div className="form-group">
                 <label className="label">Organization Name</label>
                 <input
@@ -245,27 +281,12 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <div className="form-group">
-                <label className="label">Organization URL</label>
-                <div className="flex items-center max-w-md">
-                  <span className="px-3 py-2.5 bg-gray-100 border border-r-0 border-gray-300 rounded-l-lg text-gray-500 text-sm">
-                    {window.location.origin}/
-                  </span>
-                  <input
-                    type="text"
-                    className="input rounded-l-none flex-1"
-                    value={orgForm.slug}
-                    onChange={(e) => setOrgForm({ ...orgForm, slug: e.target.value })}
-                  />
-                </div>
-                <p className="helper-text">This is your organization's unique booking URL</p>
-              </div>
-
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 max-w-md">
                 <h4 className="font-medium text-gray-900 mb-2">Booking Page URL</h4>
                 <p className="text-sm text-gray-600 break-all">
-                  {window.location.origin}/{orgForm.slug}
+                  {window.location.origin}/{organization?.slug}
                 </p>
+                <p className="helper-text mt-2">Organization URL cannot be changed after creation</p>
               </div>
 
               <div className="flex items-center gap-3 pt-4">

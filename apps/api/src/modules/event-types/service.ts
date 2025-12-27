@@ -40,6 +40,12 @@ export interface EventTypeHost {
   lastBookedAt: Date | null;
 }
 
+interface UserInfo {
+  id: string;
+  name: string;
+  email: string;
+}
+
 export async function listEventTypes(organizationId: string): Promise<EventType[]> {
   const db = getPrismaClient();
 
@@ -71,7 +77,7 @@ export async function listEventTypes(organizationId: string): Promise<EventType[
     select: { id: true, name: true, email: true },
   });
 
-  const userMap = new Map(users.map((u) => [u.id, u]));
+  const userMap = new Map<string, UserInfo>(users.map((u) => [u.id, u]));
 
   return eventTypes.map((et) => ({
     id: et.id,
@@ -136,7 +142,7 @@ export async function getEventTypeById(
     where: { id: { in: userIds } },
     select: { id: true, name: true, email: true },
   });
-  const userMap = new Map(users.map((u) => [u.id, u]));
+  const userMap = new Map<string, UserInfo>(users.map((u) => [u.id, u]));
 
   return {
     id: eventType.id,
@@ -457,7 +463,7 @@ export async function listHosts(eventTypeId: string): Promise<EventTypeHost[]> {
     where: { id: { in: userIds } },
     select: { id: true, name: true, email: true },
   });
-  const userMap = new Map(users.map((u) => [u.id, u]));
+  const userMap = new Map<string, UserInfo>(users.map((u) => [u.id, u]));
 
   return eventType.hosts.map((h) => {
     const user = userMap.get(h.userId);
