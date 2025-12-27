@@ -1529,9 +1529,8 @@ build_and_start() {
     docker compose run --rm api sh -c "cd /app/apps/api && /app/node_modules/.bin/prisma db push --skip-generate"
 
     # Seed admin user using tsx (runs TypeScript directly)
-    # NODE_PATH helps tsx find modules in the monorepo structure
     log_info "Creating admin user..."
-    docker compose run --rm api sh -c "cd /app && NODE_PATH=/app/node_modules tsx apps/api/prisma/seed.ts"
+    docker compose run --rm api sh -c "cd /app/apps/api && tsx prisma/seed.ts"
 
     log_success "Database initialized"
 }
