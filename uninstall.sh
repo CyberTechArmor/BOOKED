@@ -49,6 +49,7 @@ log_error() {
 parse_args() {
     REMOVE_DATA=false
     REMOVE_IMAGES=false
+    REMOVE_BUILD_CACHE=false
     FORCE=false
     CUSTOM_DIR=""
 
@@ -60,6 +61,16 @@ parse_args() {
                 ;;
             --remove-images)
                 REMOVE_IMAGES=true
+                shift
+                ;;
+            --remove-build-cache)
+                REMOVE_BUILD_CACHE=true
+                shift
+                ;;
+            --all)
+                REMOVE_DATA=true
+                REMOVE_IMAGES=true
+                REMOVE_BUILD_CACHE=true
                 shift
                 ;;
             --force|-f)
@@ -96,13 +107,16 @@ show_help() {
     echo "  -d, --dir DIR        Specify installation directory (default: /opt/booked)"
     echo "  --remove-data        Remove all data including database volumes"
     echo "  --remove-images      Remove Docker images"
+    echo "  --remove-build-cache Remove Docker build cache"
+    echo "  --all                Remove everything (data, images, build cache)"
     echo "  -f, --force          Skip confirmation prompts"
     echo "  -h, --help           Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0                           # Interactive uninstall"
+    echo "  $0                           # Interactive uninstall (keeps data)"
     echo "  $0 --remove-data             # Remove including all data"
-    echo "  $0 --force --remove-data     # Force remove everything"
+    echo "  $0 --all                     # Remove everything completely"
+    echo "  $0 --force --all             # Force remove everything (no prompts)"
     echo "  $0 --dir /custom/path        # Uninstall from custom location"
 }
 
@@ -151,7 +165,11 @@ confirm_uninstall() {
     if [[ "$REMOVE_IMAGES" == true ]]; then
         echo "    - Remove Docker images"
     fi
+    if [[ "$REMOVE_BUILD_CACHE" == true ]]; then
+        echo "    - Remove Docker build cache"
+    fi
     echo "    - Remove installation directory"
+    echo "    - Remove Docker networks"
     echo ""
 
     if [[ "$REMOVE_DATA" == true ]]; then
@@ -267,6 +285,23 @@ remove_networks() {
     log_success "Docker networks cleaned up"
 }
 
+# Remove Docker build cache
+remove_build_cache() {
+    if [[ "$REMOVE_BUILD_CACHE" != true ]]; then
+        return 0
+    fi
+
+    log_info "Removing Docker build cache..."
+
+    # Remove build cache
+    docker builder prune -af 2>/dev/null || true
+
+    # Also prune unused images and containers
+    docker system prune -f 2>/dev/null || true
+
+    log_success "Docker build cache removed"
+}
+
 # Print completion message
 print_completion() {
     echo ""
@@ -283,15 +318,26 @@ print_completion() {
     fi
     if [[ "$REMOVE_IMAGES" == true ]]; then
         echo "    ✓ Docker images removed"
+    else
+        echo "    - Docker images preserved (use --remove-images to remove)"
+    fi
+    if [[ "$REMOVE_BUILD_CACHE" == true ]]; then
+        echo "    ✓ Docker build cache removed"
     fi
     echo "    ✓ Installation directory removed"
     echo "    ✓ Docker networks cleaned up"
     echo ""
 
-    if [[ "$REMOVE_DATA" != true ]]; then
-        echo -e "${YELLOW}Note:${NC} Database volumes may still exist. To remove them, run:"
-        echo "  docker volume ls | grep booked"
-        echo "  docker volume rm <volume_name>"
+    if [[ "$REMOVE_DATA" != true || "$REMOVE_IMAGES" != true ]]; then
+        echo -e "${YELLOW}Note:${NC} Some Docker resources may still exist."
+        if [[ "$REMOVE_DATA" != true ]]; then
+            echo "  To remove volumes: docker volume ls | grep booked && docker volume rm <name>"
+        fi
+        if [[ "$REMOVE_IMAGES" != true ]]; then
+            echo "  To remove images:  docker images | grep booked && docker rmi <image>"
+        fi
+        echo ""
+        echo "  Or use: $0 --all  to remove everything"
         echo ""
     fi
 
@@ -307,6 +353,7 @@ main() {
     confirm_uninstall
     stop_containers
     remove_images
+    remove_build_cache
     remove_directory
     remove_volumes
     remove_networks

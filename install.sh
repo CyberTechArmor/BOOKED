@@ -14,6 +14,41 @@ REPO_URL="https://github.com/CyberTechArmor/BOOKED.git"
 INSTALL_DIR="/opt/booked"
 BRANCH="claude/fix-install-cleanup-script-0IXZw"
 
+# Command line options
+NO_CACHE=false
+SKIP_HARDWARE_CHECK=false
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --no-cache)
+            NO_CACHE=true
+            shift
+            ;;
+        --skip-hardware-check)
+            SKIP_HARDWARE_CHECK=true
+            shift
+            ;;
+        --help|-h)
+            echo "BOOKED Installation Script"
+            echo ""
+            echo "Usage: $0 [options]"
+            echo ""
+            echo "Options:"
+            echo "  --no-cache            Force Docker to rebuild without using cache"
+            echo "  --skip-hardware-check Skip hardware detection and optimization"
+            echo "  --help, -h            Show this help message"
+            echo ""
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
 print_banner() {
     echo -e "${CYAN}"
     echo "╔══════════════════════════════════════════════════════════════╗"
@@ -1498,19 +1533,25 @@ build_and_start() {
     log_info "Cleaning up any existing containers and volumes..."
     docker compose down -v 2>/dev/null || true
 
-    # Build images (use Docker cache for faster rebuilds on low-resource VPS)
+    # Build images (use --no-cache flag if specified)
+    local build_opts=""
+    if [ "$NO_CACHE" = true ]; then
+        build_opts="--no-cache"
+        log_info "Building without cache (--no-cache specified)..."
+    fi
+
     case $PROXY_TYPE in
         nginx)
-            docker compose -f docker-compose.yml -f docker-compose.nginx.yml build
+            docker compose -f docker-compose.yml -f docker-compose.nginx.yml build $build_opts
             ;;
         traefik)
-            docker compose -f docker-compose.yml -f docker-compose.traefik.yml build
+            docker compose -f docker-compose.yml -f docker-compose.traefik.yml build $build_opts
             ;;
         caddy)
-            docker compose -f docker-compose.yml -f docker-compose.caddy.yml build
+            docker compose -f docker-compose.yml -f docker-compose.caddy.yml build $build_opts
             ;;
         none)
-            docker compose -f docker-compose.yml -f docker-compose.external-proxy.yml build
+            docker compose -f docker-compose.yml -f docker-compose.external-proxy.yml build $build_opts
             ;;
     esac
 
@@ -1610,7 +1651,13 @@ EOF
 main() {
     print_banner
     check_requirements
-    check_hardware_and_optimize
+
+    if [ "$SKIP_HARDWARE_CHECK" = false ]; then
+        check_hardware_and_optimize
+    else
+        log_info "Skipping hardware check (--skip-hardware-check specified)"
+    fi
+
     prompt_config
     clone_repository
     generate_env_file
