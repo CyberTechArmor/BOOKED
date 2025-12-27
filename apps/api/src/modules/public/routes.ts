@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getPrismaClient } from '../../infrastructure/database/client.js';
 import { getAvailability } from '../../core/availability/engine.js';
 import { createBooking, CreateBookingData, cancelBooking } from '../../core/booking/engine.js';
-import { ValidationError, NotFoundError } from '../../common/utils/errors.js';
+import { ValidationError, NotFoundError, ConflictError } from '../../common/utils/errors.js';
 import { runWithContext, RequestContext } from '../../common/utils/context.js';
 
 const getAvailabilityQuerySchema = z.object({
@@ -292,7 +292,20 @@ export async function publicRoutes(app: FastifyInstance): Promise<void> {
         userAgent: request.headers['user-agent'] ?? 'unknown',
       };
 
-      const booking = await runWithContext(ctx, () => createBooking(bookingData));
+      let booking;
+      try {
+        booking = await runWithContext(ctx, () => createBooking(bookingData));
+      } catch (err) {
+        // Log the actual error for debugging
+        console.error('Booking creation error:', err);
+        // Re-throw known errors, wrap unknown errors with better messages
+        if (err instanceof ValidationError || err instanceof NotFoundError || err instanceof ConflictError) {
+          throw err;
+        }
+        throw new ValidationError(
+          err instanceof Error ? err.message : 'Failed to create booking'
+        );
+      }
 
       return reply.status(201).send({
         success: true,

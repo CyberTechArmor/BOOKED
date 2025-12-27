@@ -402,7 +402,7 @@ export default function BookingPage() {
                     {selectedSlot && (
                       <button
                         onClick={handleContinue}
-                        className="w-full mt-4 px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                        className="btn-primary w-full mt-4"
                       >
                         Continue
                       </button>
@@ -485,7 +485,7 @@ export default function BookingPage() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    className="btn-primary w-full"
                   >
                     {submitting ? 'Scheduling...' : 'Schedule Meeting'}
                   </button>

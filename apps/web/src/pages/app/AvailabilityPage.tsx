@@ -189,9 +189,9 @@ export default function AvailabilityPage(): JSX.Element {
   if (isLoading) {
     return (
       <div className="p-6 lg:p-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Availability</h1>
+        <h1 className="text-2xl font-bold text-[var(--foreground)] mb-6">Availability</h1>
         <div className="card">
-          <p className="text-gray-500">Loading schedules...</p>
+          <p className="text-[var(--muted)]">Loading schedules...</p>
         </div>
       </div>
     );
@@ -201,7 +201,7 @@ export default function AvailabilityPage(): JSX.Element {
     <div className="p-6 lg:p-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Availability</h1>
+          <h1 className="text-2xl font-bold text-[var(--foreground)]">Availability</h1>
           <button onClick={handleCreateNew} className="btn-primary">
             Create Schedule
           </button>
@@ -215,9 +215,9 @@ export default function AvailabilityPage(): JSX.Element {
 
         {/* Create/Edit Schedule Modal */}
         {showCreateForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">
+          <div className="modal-backdrop">
+            <div className="modal p-6 max-w-md">
+              <h2 className="text-xl font-bold text-[var(--foreground)] mb-4">
                 {editingSchedule ? 'Edit Schedule' : 'Create Schedule'}
               </h2>
 
@@ -245,9 +245,9 @@ export default function AvailabilityPage(): JSX.Element {
                       type="checkbox"
                       checked={formData.isDefault}
                       onChange={(e) => setFormData({ ...formData, isDefault: e.target.checked })}
-                      className="rounded border-gray-300"
+                      className="checkbox"
                     />
-                    <span className="text-sm text-gray-700">Set as default schedule</span>
+                    <span className="text-sm text-[var(--foreground-secondary)]">Set as default schedule</span>
                   </label>
                 </div>
 
@@ -340,9 +340,9 @@ export default function AvailabilityPage(): JSX.Element {
 
         {/* Add Time Window Modal */}
         {showAddWindow && selectedSchedule && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Add Time Window</h2>
+          <div className="modal-backdrop">
+            <div className="modal p-6 max-w-md">
+              <h2 className="text-xl font-bold text-[var(--foreground)] mb-4">Add Time Window</h2>
 
               <form onSubmit={handleAddWindow}>
                 <div className="mb-4">
@@ -411,7 +411,7 @@ export default function AvailabilityPage(): JSX.Element {
         {schedules.length === 0 ? (
           <div className="card text-center py-12">
             <svg
-              className="mx-auto h-12 w-12 text-gray-400"
+              className="mx-auto h-12 w-12 text-[var(--muted)]"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -424,8 +424,8 @@ export default function AvailabilityPage(): JSX.Element {
                 d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
-            <h3 className="mt-4 text-lg font-medium text-gray-900">No schedules yet</h3>
-            <p className="mt-2 text-gray-500">
+            <h3 className="mt-4 text-lg font-medium text-[var(--foreground)]">No schedules yet</h3>
+            <p className="mt-2 text-[var(--muted)]">
               Create a schedule to define when you're available for bookings.
             </p>
             <button onClick={handleCreateNew} className="btn-primary mt-4">
@@ -437,7 +437,7 @@ export default function AvailabilityPage(): JSX.Element {
             {/* Schedule List */}
             <div className="lg:col-span-1">
               <div className="card">
-                <h2 className="text-lg font-medium text-gray-900 mb-4">Your Schedules</h2>
+                <h2 className="text-lg font-medium text-[var(--foreground)] mb-4">Your Schedules</h2>
                 <div className="space-y-2">
                   {schedules.map((schedule) => (
                     <div
@@ -446,15 +446,15 @@ export default function AvailabilityPage(): JSX.Element {
                       tabIndex={0}
                       className={`p-3 rounded-lg border cursor-pointer transition-colors ${
                         selectedScheduleId === schedule.id
-                          ? 'border-[var(--primary)] bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
+                          ? 'border-[var(--primary)] bg-[var(--background-secondary)]'
+                          : 'border-[var(--border)] hover:border-[var(--border-strong)]'
                       }`}
                       onClick={() => setSelectedScheduleId(schedule.id)}
                       onKeyDown={(e) => e.key === 'Enter' && setSelectedScheduleId(schedule.id)}
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <h3 className="font-medium text-gray-900">{schedule.name}</h3>
+                          <h3 className="font-medium text-[var(--foreground)]">{schedule.name}</h3>
                           {schedule.isDefault && (
                             <span className="text-xs text-[var(--primary)]">Default</span>
                           )}
@@ -465,7 +465,7 @@ export default function AvailabilityPage(): JSX.Element {
                               e.stopPropagation();
                               handleEdit(schedule);
                             }}
-                            className="p-1 text-gray-500 hover:text-gray-700"
+                            className="p-1 text-[var(--muted)] hover:text-[var(--foreground)]"
                             title="Edit"
                             aria-label={`Edit ${schedule.name}`}
                           >
@@ -478,7 +478,7 @@ export default function AvailabilityPage(): JSX.Element {
                               e.stopPropagation();
                               handleDelete(schedule);
                             }}
-                            className="p-1 text-gray-500 hover:text-red-600"
+                            className="p-1 text-[var(--muted)] hover:text-red-500"
                             title="Delete"
                             aria-label={`Delete ${schedule.name}`}
                           >
@@ -488,7 +488,7 @@ export default function AvailabilityPage(): JSX.Element {
                           </button>
                         </div>
                       </div>
-                      <p className="text-sm text-gray-500 mt-1">
+                      <p className="text-sm text-[var(--muted)] mt-1">
                         {schedule.windows.length} time window{schedule.windows.length !== 1 ? 's' : ''}
                       </p>
                     </div>
@@ -503,7 +503,7 @@ export default function AvailabilityPage(): JSX.Element {
                 <div className="card">
                   <div className="flex items-center justify-between mb-6">
                     <div>
-                      <h2 className="text-lg font-medium text-gray-900">{selectedSchedule.name}</h2>
+                      <h2 className="text-lg font-medium text-[var(--foreground)]">{selectedSchedule.name}</h2>
                       {selectedSchedule.isDefault && (
                         <span className="text-sm text-[var(--primary)]">Default Schedule</span>
                       )}
@@ -514,36 +514,36 @@ export default function AvailabilityPage(): JSX.Element {
                   </div>
 
                   {/* Schedule Settings Summary */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-[var(--background-secondary)] rounded-lg border border-[var(--border)]">
                     <div>
-                      <p className="text-xs text-gray-500">Buffer Before</p>
-                      <p className="font-medium">{selectedSchedule.bufferBefore || 0} min</p>
+                      <p className="text-xs text-[var(--muted)]">Buffer Before</p>
+                      <p className="font-medium text-[var(--foreground)]">{selectedSchedule.bufferBefore || 0} min</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">Buffer After</p>
-                      <p className="font-medium">{selectedSchedule.bufferAfter || 0} min</p>
+                      <p className="text-xs text-[var(--muted)]">Buffer After</p>
+                      <p className="font-medium text-[var(--foreground)]">{selectedSchedule.bufferAfter || 0} min</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">Min Notice</p>
-                      <p className="font-medium">{selectedSchedule.minimumNotice || 0} hrs</p>
+                      <p className="text-xs text-[var(--muted)]">Min Notice</p>
+                      <p className="font-medium text-[var(--foreground)]">{selectedSchedule.minimumNotice || 0} hrs</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500">Max/Day</p>
-                      <p className="font-medium">{selectedSchedule.maxBookingsPerDay || 'No limit'}</p>
+                      <p className="text-xs text-[var(--muted)]">Max/Day</p>
+                      <p className="font-medium text-[var(--foreground)]">{selectedSchedule.maxBookingsPerDay || 'No limit'}</p>
                     </div>
                   </div>
 
                   {/* Weekly View */}
-                  <h3 className="text-md font-medium text-gray-900 mb-4">Weekly Availability</h3>
+                  <h3 className="text-md font-medium text-[var(--foreground)] mb-4">Weekly Availability</h3>
                   <div className="space-y-3">
                     {DAYS_OF_WEEK.map((day, index) => {
                       const windows = getWindowsForDay(index);
                       return (
-                        <div key={day} className="flex items-start gap-4 py-2 border-b border-gray-100 last:border-0">
-                          <div className="w-24 font-medium text-gray-700">{day}</div>
+                        <div key={day} className="flex items-start gap-4 py-2 border-b border-[var(--border)] last:border-0">
+                          <div className="w-24 font-medium text-[var(--foreground-secondary)]">{day}</div>
                           <div className="flex-1">
                             {windows.length === 0 ? (
-                              <span className="text-gray-400 text-sm">Unavailable</span>
+                              <span className="text-[var(--muted)] text-sm">Unavailable</span>
                             ) : (
                               <div className="flex flex-wrap gap-2">
                                 {windows.map((window) => (
@@ -575,7 +575,7 @@ export default function AvailabilityPage(): JSX.Element {
                 </div>
               ) : (
                 <div className="card text-center py-12">
-                  <p className="text-gray-500">Select a schedule to view details</p>
+                  <p className="text-[var(--muted)]">Select a schedule to view details</p>
                 </div>
               )}
             </div>
