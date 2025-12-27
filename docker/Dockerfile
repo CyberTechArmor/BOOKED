@@ -88,14 +88,19 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=api-builder /app/apps/api/dist ./apps/api/dist
 COPY --from=api-builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=api-builder /app/apps/api/src/types ./apps/api/src/types
-# Copy generated Prisma client (created by prisma generate)
-COPY --from=api-builder /app/apps/api/node_modules/.prisma ./apps/api/node_modules/.prisma
+# Copy api's node_modules from api-builder (includes .prisma, @prisma, @node-rs if not hoisted)
+COPY --from=api-builder /app/apps/api/node_modules ./apps/api/node_modules
 
-# Copy @prisma/client and @node-rs to api's node_modules for seed script
+# Also copy @prisma/client and @node-rs from root if hoisted
 # tsx resolves modules relative to file location, symlinks don't work
-RUN mkdir -p /app/apps/api/node_modules && \
-    cp -r /app/node_modules/@prisma /app/apps/api/node_modules/@prisma && \
-    cp -r /app/node_modules/@node-rs /app/apps/api/node_modules/@node-rs
+RUN if [ -d /app/node_modules/@prisma/client ]; then \
+      mkdir -p /app/apps/api/node_modules/@prisma && \
+      cp -r /app/node_modules/@prisma/client /app/apps/api/node_modules/@prisma/; \
+    fi && \
+    if [ -d /app/node_modules/@node-rs/argon2 ]; then \
+      mkdir -p /app/apps/api/node_modules/@node-rs && \
+      cp -r /app/node_modules/@node-rs/argon2 /app/apps/api/node_modules/@node-rs/; \
+    fi
 
 # Set ownership
 RUN chown -R booked:nodejs /app
