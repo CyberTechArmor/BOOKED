@@ -1240,7 +1240,7 @@ case "${PROXY_TYPE}" in
 esac
 
 # Run migrations
-docker compose exec api sh -c "cd /app/apps/api && /app/node_modules/.bin/prisma migrate deploy"
+docker compose exec api sh -c "cd /app/apps/api && /app/node_modules/.bin/prisma db push --skip-generate"
 
 echo "BOOKED updated successfully!"
 EOF
@@ -1285,13 +1285,13 @@ build_and_start() {
     log_info "Waiting for database to be ready..."
     sleep 10
 
-    # Run migrations
-    log_info "Running database migrations..."
-    docker compose run --rm api sh -c "cd /app/apps/api && /app/node_modules/.bin/prisma migrate deploy"
+    # Push database schema (no migrations needed for initial setup)
+    log_info "Pushing database schema..."
+    docker compose run --rm api sh -c "cd /app/apps/api && /app/node_modules/.bin/prisma db push --skip-generate"
 
     # Seed admin user
     log_info "Creating admin user..."
-    docker compose run --rm api sh -c "cd /app/apps/api && /app/node_modules/.bin/prisma db seed"
+    docker compose run --rm api sh -c "cd /app/apps/api && node prisma/seed.js"
 
     log_success "Database initialized"
 }
