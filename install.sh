@@ -899,8 +899,13 @@ server {
     ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
     ssl_prefer_server_ciphers off;
 
-    # HSTS
-    add_header Strict-Transport-Security "max-age=63072000" always;
+    # Security headers - force HTTPS for all content
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Content-Security-Policy "upgrade-insecure-requests; default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss:; font-src 'self' data:; frame-ancestors 'self';" always;
 
     # API routes
     location /api {
@@ -914,10 +919,14 @@ server {
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Ssl on;
         proxy_cache_bypass \$http_upgrade;
         proxy_read_timeout 300s;
         proxy_connect_timeout 75s;
+
+        # Remove any internal headers
+        proxy_hide_header X-Powered-By;
     }
 
     # Health check endpoint
@@ -925,6 +934,7 @@ server {
         proxy_pass http://booked_api/health;
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Proto https;
         access_log off;
     }
 
@@ -937,8 +947,12 @@ server {
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Ssl on;
         proxy_cache_bypass \$http_upgrade;
+
+        # Remove any internal headers
+        proxy_hide_header X-Powered-By;
     }
 }
 EOF
@@ -1593,7 +1607,7 @@ build_and_start() {
 
     case $PROXY_TYPE in
         nginx)
-            # For nginx, we need to obtain SSL certificate first
+            # For nginx, we need to handle SSL certificate
             log_info "Initializing Let's Encrypt certificates..."
 
             # Create directories
@@ -1608,76 +1622,194 @@ build_and_start() {
                 curl -s https://raw.githubusercontent.com/certbot/certbot/master/certbot/certbot/ssl-dhparams.pem > ./certbot/conf/ssl-dhparams.pem
             fi
 
-            # Create dummy certificate for nginx to start
-            log_info "Creating temporary self-signed certificate..."
-            mkdir -p ./certbot/conf/live/$DOMAIN
-            openssl req -x509 -nodes -newkey rsa:4096 -days 1 \
-                -keyout ./certbot/conf/live/$DOMAIN/privkey.pem \
-                -out ./certbot/conf/live/$DOMAIN/fullchain.pem \
-                -subj '/CN=localhost' 2>/dev/null
-            cp ./certbot/conf/live/$DOMAIN/fullchain.pem ./certbot/conf/live/$DOMAIN/chain.pem
+            # Check if valid Let's Encrypt certificate already exists
+            CERT_EXISTS=false
+            if [ -f "./certbot/conf/live/$DOMAIN/fullchain.pem" ] && [ -f "./certbot/conf/live/$DOMAIN/privkey.pem" ]; then
+                # Check if certificate is not expired (valid for at least 7 days)
+                if openssl x509 -checkend 604800 -noout -in "./certbot/conf/live/$DOMAIN/fullchain.pem" 2>/dev/null; then
+                    log_success "Found existing valid Let's Encrypt certificate for $DOMAIN"
+                    CERT_EXISTS=true
+                else
+                    log_warning "Existing certificate is expired or expiring soon, will request renewal..."
+                    rm -rf ./certbot/conf/live/$DOMAIN
+                    rm -rf ./certbot/conf/archive/$DOMAIN
+                    rm -rf ./certbot/conf/renewal/$DOMAIN.conf
+                fi
+            fi
 
-            # Start all services including nginx with dummy cert
-            log_info "Starting nginx with temporary certificate..."
-            docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d
+            if [ "$CERT_EXISTS" = true ]; then
+                # Use existing certificate
+                log_info "Starting all services with existing certificate..."
+                docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d
 
-            # Wait for nginx to be ready
-            sleep 5
-
-            # Delete dummy certificate and clean up certbot state
-            log_info "Removing temporary certificate..."
-            rm -rf ./certbot/conf/live/$DOMAIN
-            rm -rf ./certbot/conf/archive/$DOMAIN
-            rm -rf ./certbot/conf/renewal/$DOMAIN.conf
-            # Also clean any accounts that might interfere
-            rm -rf ./certbot/conf/accounts 2>/dev/null || true
-
-            # Request real certificate from Let's Encrypt
-            # Note: --entrypoint "" overrides the renewal-loop entrypoint in docker-compose
-            log_info "Requesting Let's Encrypt certificate for $DOMAIN..."
-            docker compose -f docker-compose.yml -f docker-compose.nginx.yml run --rm --entrypoint "" certbot certbot certonly \
-                --webroot \
-                --webroot-path=/var/www/certbot \
-                --email $LETSENCRYPT_EMAIL \
-                --agree-tos \
-                --no-eff-email \
-                --non-interactive \
-                --rsa-key-size 4096 \
-                -d $DOMAIN
-
-            # Check if certificate was obtained
-            if [ -f "./certbot/conf/live/$DOMAIN/fullchain.pem" ]; then
-                # Wait for api and web containers to be running before reloading nginx
-                log_info "Waiting for API and Web services to be ready..."
-                local max_attempts=30
-                local attempt=0
-                while [ $attempt -lt $max_attempts ]; do
-                    if docker compose -f docker-compose.yml -f docker-compose.nginx.yml ps api web 2>/dev/null | grep -q "running"; then
-                        break
-                    fi
-                    attempt=$((attempt + 1))
-                    sleep 2
-                done
-
-                # Restart nginx to pick up the new certificate and resolve upstreams
-                log_info "Restarting nginx with Let's Encrypt certificate..."
+                # Wait for services and restart nginx to ensure proper upstream resolution
+                sleep 5
                 docker compose -f docker-compose.yml -f docker-compose.nginx.yml restart nginx
-                log_success "SSL certificate obtained and nginx configured"
+                log_success "All services started with existing SSL certificate"
             else
-                log_warning "Failed to obtain Let's Encrypt certificate"
-                log_warning "The site will run with self-signed certificate (browser warning expected)"
-                log_info "You can retry certificate acquisition later with: ./init-letsencrypt.sh"
-
-                # Recreate self-signed cert so nginx can at least run
-                log_info "Recreating self-signed certificate for nginx..."
+                # Need to obtain a new certificate
+                # Create temporary self-signed certificate for nginx to start
+                log_info "Creating temporary self-signed certificate..."
                 mkdir -p ./certbot/conf/live/$DOMAIN
-                openssl req -x509 -nodes -newkey rsa:4096 -days 365 \
+                openssl req -x509 -nodes -newkey rsa:4096 -days 1 \
                     -keyout ./certbot/conf/live/$DOMAIN/privkey.pem \
                     -out ./certbot/conf/live/$DOMAIN/fullchain.pem \
-                    -subj "/CN=$DOMAIN" 2>/dev/null
+                    -subj '/CN=localhost' 2>/dev/null
                 cp ./certbot/conf/live/$DOMAIN/fullchain.pem ./certbot/conf/live/$DOMAIN/chain.pem
 
-                docker compose -f docker-compose.yml -f docker-compose.nginx.yml exec -T nginx nginx -s reload
+                # Start all services including nginx with dummy cert
+                log_info "Starting nginx with temporary certificate..."
+                docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d
+
+                # Wait for nginx to be ready
+                sleep 5
+
+                # Delete dummy certificate and clean up certbot state
+                log_info "Removing temporary certificate..."
+                rm -rf ./certbot/conf/live/$DOMAIN
+                rm -rf ./certbot/conf/archive/$DOMAIN
+                rm -rf ./certbot/conf/renewal/$DOMAIN.conf
+                rm -rf ./certbot/conf/accounts 2>/dev/null || true
+
+                # Request real certificate from Let's Encrypt
+                log_info "Requesting Let's Encrypt certificate for $DOMAIN..."
+
+                # Capture the output to check for rate limit errors
+                CERTBOT_OUTPUT=$(docker compose -f docker-compose.yml -f docker-compose.nginx.yml run --rm --entrypoint "" certbot certbot certonly \
+                    --webroot \
+                    --webroot-path=/var/www/certbot \
+                    --email $LETSENCRYPT_EMAIL \
+                    --agree-tos \
+                    --no-eff-email \
+                    --non-interactive \
+                    --rsa-key-size 4096 \
+                    -d $DOMAIN 2>&1) || true
+
+                echo "$CERTBOT_OUTPUT"
+
+                # Check if certificate was obtained
+                if [ -f "./certbot/conf/live/$DOMAIN/fullchain.pem" ]; then
+                    # Wait for api and web containers to be running before reloading nginx
+                    log_info "Waiting for API and Web services to be ready..."
+                    local max_attempts=30
+                    local attempt=0
+                    while [ $attempt -lt $max_attempts ]; do
+                        if docker compose -f docker-compose.yml -f docker-compose.nginx.yml ps api web 2>/dev/null | grep -q "running"; then
+                            break
+                        fi
+                        attempt=$((attempt + 1))
+                        sleep 2
+                    done
+
+                    # Restart nginx to pick up the new certificate and resolve upstreams
+                    log_info "Restarting nginx with Let's Encrypt certificate..."
+                    docker compose -f docker-compose.yml -f docker-compose.nginx.yml restart nginx
+                    log_success "SSL certificate obtained and nginx configured"
+                else
+                    # Check if rate limit was hit
+                    if echo "$CERTBOT_OUTPUT" | grep -q "too many certificates"; then
+                        log_error "Let's Encrypt rate limit reached!"
+                        echo ""
+                        echo -e "${YELLOW}Let's Encrypt has a limit of 5 certificates per domain per week.${NC}"
+                        echo -e "${YELLOW}You have the following options:${NC}"
+                        echo ""
+                        echo "  1) Wait until the rate limit resets (check error message for date)"
+                        echo "  2) Use a different domain/subdomain"
+                        echo "  3) Continue with self-signed certificate for now"
+                        echo ""
+                        read -p "Would you like to use a different domain? [y/N]: " USE_ALT_DOMAIN
+
+                        if [[ "$USE_ALT_DOMAIN" =~ ^[Yy]$ ]]; then
+                            read -p "Enter alternative domain: " ALT_DOMAIN
+                            if [[ -n "$ALT_DOMAIN" ]]; then
+                                # Update domain
+                                OLD_DOMAIN="$DOMAIN"
+                                DOMAIN="$ALT_DOMAIN"
+                                log_info "Updating configuration for new domain: $DOMAIN..."
+
+                                # Update .env file
+                                sed -i "s|APP_URL=https://${OLD_DOMAIN}|APP_URL=https://${DOMAIN}|g" "$INSTALL_DIR/.env"
+                                sed -i "s|API_URL=https://${OLD_DOMAIN}|API_URL=https://${DOMAIN}/api|g" "$INSTALL_DIR/.env"
+                                sed -i "s|CORS_ORIGINS=https://${OLD_DOMAIN}|CORS_ORIGINS=https://${DOMAIN}|g" "$INSTALL_DIR/.env"
+
+                                # Update nginx config
+                                sed -i "s|server_name ${OLD_DOMAIN}|server_name ${DOMAIN}|g" "$INSTALL_DIR/proxy/nginx/default.conf"
+                                sed -i "s|/live/${OLD_DOMAIN}/|/live/${DOMAIN}/|g" "$INSTALL_DIR/proxy/nginx/default.conf"
+
+                                # Update start/stop scripts
+                                sed -i "s|https://${OLD_DOMAIN}|https://${DOMAIN}|g" "$INSTALL_DIR/start.sh"
+
+                                # Stop services
+                                docker compose -f docker-compose.yml -f docker-compose.nginx.yml down
+
+                                # Clean up old cert data
+                                rm -rf ./certbot/conf/live/*
+                                rm -rf ./certbot/conf/archive/*
+                                rm -rf ./certbot/conf/renewal/*
+
+                                # Restart certificate process with new domain
+                                log_info "Retrying certificate request for $DOMAIN..."
+                                mkdir -p ./certbot/conf/live/$DOMAIN
+                                openssl req -x509 -nodes -newkey rsa:4096 -days 1 \
+                                    -keyout ./certbot/conf/live/$DOMAIN/privkey.pem \
+                                    -out ./certbot/conf/live/$DOMAIN/fullchain.pem \
+                                    -subj '/CN=localhost' 2>/dev/null
+                                cp ./certbot/conf/live/$DOMAIN/fullchain.pem ./certbot/conf/live/$DOMAIN/chain.pem
+
+                                docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d
+                                sleep 5
+
+                                rm -rf ./certbot/conf/live/$DOMAIN
+                                rm -rf ./certbot/conf/archive/$DOMAIN
+                                rm -rf ./certbot/conf/renewal/$DOMAIN.conf
+
+                                CERTBOT_OUTPUT2=$(docker compose -f docker-compose.yml -f docker-compose.nginx.yml run --rm --entrypoint "" certbot certbot certonly \
+                                    --webroot \
+                                    --webroot-path=/var/www/certbot \
+                                    --email $LETSENCRYPT_EMAIL \
+                                    --agree-tos \
+                                    --no-eff-email \
+                                    --non-interactive \
+                                    --rsa-key-size 4096 \
+                                    -d $DOMAIN 2>&1) || true
+
+                                echo "$CERTBOT_OUTPUT2"
+
+                                if [ -f "./certbot/conf/live/$DOMAIN/fullchain.pem" ]; then
+                                    docker compose -f docker-compose.yml -f docker-compose.nginx.yml restart nginx
+                                    log_success "SSL certificate obtained for $DOMAIN"
+                                else
+                                    log_warning "Still unable to obtain certificate. Using self-signed."
+                                    mkdir -p ./certbot/conf/live/$DOMAIN
+                                    openssl req -x509 -nodes -newkey rsa:4096 -days 365 \
+                                        -keyout ./certbot/conf/live/$DOMAIN/privkey.pem \
+                                        -out ./certbot/conf/live/$DOMAIN/fullchain.pem \
+                                        -subj "/CN=$DOMAIN" 2>/dev/null
+                                    cp ./certbot/conf/live/$DOMAIN/fullchain.pem ./certbot/conf/live/$DOMAIN/chain.pem
+                                    docker compose -f docker-compose.yml -f docker-compose.nginx.yml restart nginx
+                                fi
+                            fi
+                        fi
+                    fi
+
+                    # If we still don't have a valid cert, create self-signed
+                    if [ ! -f "./certbot/conf/live/$DOMAIN/fullchain.pem" ]; then
+                        log_warning "Failed to obtain Let's Encrypt certificate"
+                        log_warning "The site will run with self-signed certificate (browser warning expected)"
+                        log_info "You can retry certificate acquisition later with: ./init-letsencrypt.sh"
+
+                        # Recreate self-signed cert so nginx can at least run
+                        log_info "Recreating self-signed certificate for nginx..."
+                        mkdir -p ./certbot/conf/live/$DOMAIN
+                        openssl req -x509 -nodes -newkey rsa:4096 -days 365 \
+                            -keyout ./certbot/conf/live/$DOMAIN/privkey.pem \
+                            -out ./certbot/conf/live/$DOMAIN/fullchain.pem \
+                            -subj "/CN=$DOMAIN" 2>/dev/null
+                        cp ./certbot/conf/live/$DOMAIN/fullchain.pem ./certbot/conf/live/$DOMAIN/chain.pem
+
+                        docker compose -f docker-compose.yml -f docker-compose.nginx.yml restart nginx
+                    fi
+                fi
             fi
             ;;
         traefik)
