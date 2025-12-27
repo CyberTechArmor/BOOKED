@@ -91,10 +91,11 @@ COPY --from=api-builder /app/apps/api/src/types ./apps/api/src/types
 # Copy generated Prisma client (created by prisma generate)
 COPY --from=api-builder /app/apps/api/node_modules/.prisma ./apps/api/node_modules/.prisma
 
-# Create symlinks for seed script module resolution (tsx resolves relative to file location)
-RUN mkdir -p /app/apps/api/node_modules/@prisma && \
-    ln -s /app/node_modules/@prisma/client /app/apps/api/node_modules/@prisma/client && \
-    ln -s /app/node_modules/@node-rs /app/apps/api/node_modules/@node-rs
+# Copy @prisma/client and @node-rs to api's node_modules for seed script
+# tsx resolves modules relative to file location, symlinks don't work
+RUN mkdir -p /app/apps/api/node_modules && \
+    cp -r /app/node_modules/@prisma /app/apps/api/node_modules/@prisma && \
+    cp -r /app/node_modules/@node-rs /app/apps/api/node_modules/@node-rs
 
 # Set ownership
 RUN chown -R booked:nodejs /app
