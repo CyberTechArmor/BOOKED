@@ -1024,20 +1024,31 @@ else
     STAGING_ARG=""
 fi
 
-docker compose -f docker-compose.yml -f docker-compose.nginx.yml run --rm certbot certonly \\
+# Note: --entrypoint "" overrides the renewal-loop entrypoint
+docker compose -f docker-compose.yml -f docker-compose.nginx.yml run --rm --entrypoint "" certbot certbot certonly \\
     --webroot \\
     --webroot-path=/var/www/certbot \\
     \$STAGING_ARG \\
     --email \$EMAIL \\
     --agree-tos \\
     --no-eff-email \\
+    --non-interactive \\
+    --rsa-key-size 4096 \\
     -d \$DOMAIN
 
-# Reload nginx
-echo "Reloading nginx..."
-docker compose -f docker-compose.yml -f docker-compose.nginx.yml exec nginx nginx -s reload
-
-echo "Certificate obtained successfully!"
+# Check if certificate was obtained and reload nginx
+if [ -f "./certbot/conf/live/\$DOMAIN/fullchain.pem" ]; then
+    echo "Reloading nginx..."
+    docker compose -f docker-compose.yml -f docker-compose.nginx.yml exec nginx nginx -s reload
+    echo "Certificate obtained successfully!"
+else
+    echo "ERROR: Failed to obtain certificate. Check the logs above for details."
+    echo "Common issues:"
+    echo "  - Domain DNS not pointing to this server"
+    echo "  - Port 80 not accessible from the internet"
+    echo "  - Rate limit exceeded (too many requests)"
+    exit 1
+fi
 EOF
     chmod +x "$INSTALL_DIR/init-letsencrypt.sh"
 
@@ -1612,28 +1623,49 @@ build_and_start() {
             # Wait for nginx to be ready
             sleep 5
 
-            # Delete dummy certificate
+            # Delete dummy certificate and clean up certbot state
             log_info "Removing temporary certificate..."
             rm -rf ./certbot/conf/live/$DOMAIN
             rm -rf ./certbot/conf/archive/$DOMAIN
             rm -rf ./certbot/conf/renewal/$DOMAIN.conf
+            # Also clean any accounts that might interfere
+            rm -rf ./certbot/conf/accounts 2>/dev/null || true
 
             # Request real certificate from Let's Encrypt
+            # Note: --entrypoint "" overrides the renewal-loop entrypoint in docker-compose
             log_info "Requesting Let's Encrypt certificate for $DOMAIN..."
-            docker compose -f docker-compose.yml -f docker-compose.nginx.yml run --rm certbot certonly \
+            docker compose -f docker-compose.yml -f docker-compose.nginx.yml run --rm --entrypoint "" certbot certbot certonly \
                 --webroot \
                 --webroot-path=/var/www/certbot \
                 --email $LETSENCRYPT_EMAIL \
                 --agree-tos \
                 --no-eff-email \
-                --force-renewal \
+                --non-interactive \
+                --rsa-key-size 4096 \
                 -d $DOMAIN
 
-            # Reload nginx with real certificate
-            log_info "Reloading nginx with Let's Encrypt certificate..."
-            docker compose -f docker-compose.yml -f docker-compose.nginx.yml exec -T nginx nginx -s reload
+            # Check if certificate was obtained
+            if [ -f "./certbot/conf/live/$DOMAIN/fullchain.pem" ]; then
+                # Reload nginx with real certificate
+                log_info "Reloading nginx with Let's Encrypt certificate..."
+                docker compose -f docker-compose.yml -f docker-compose.nginx.yml exec -T nginx nginx -s reload
+                log_success "SSL certificate obtained and nginx configured"
+            else
+                log_warning "Failed to obtain Let's Encrypt certificate"
+                log_warning "The site will run with self-signed certificate (browser warning expected)"
+                log_info "You can retry certificate acquisition later with: ./init-letsencrypt.sh"
 
-            log_success "SSL certificate obtained and nginx configured"
+                # Recreate self-signed cert so nginx can at least run
+                log_info "Recreating self-signed certificate for nginx..."
+                mkdir -p ./certbot/conf/live/$DOMAIN
+                openssl req -x509 -nodes -newkey rsa:4096 -days 365 \
+                    -keyout ./certbot/conf/live/$DOMAIN/privkey.pem \
+                    -out ./certbot/conf/live/$DOMAIN/fullchain.pem \
+                    -subj "/CN=$DOMAIN" 2>/dev/null
+                cp ./certbot/conf/live/$DOMAIN/fullchain.pem ./certbot/conf/live/$DOMAIN/chain.pem
+
+                docker compose -f docker-compose.yml -f docker-compose.nginx.yml exec -T nginx nginx -s reload
+            fi
             ;;
         traefik)
             docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d
