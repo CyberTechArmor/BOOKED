@@ -264,6 +264,17 @@ async function applyConstraints(
 }
 
 /**
+ * Get the start of the week (Sunday) for a given date
+ */
+function getWeekStart(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/**
  * Apply booking caps (daily/weekly limits)
  */
 async function applyBookingCaps(
@@ -283,13 +294,39 @@ async function applyBookingCaps(
     rangesByDay.get(dayKey)!.push(range);
   }
 
+  // Cache for weekly booking counts
+  const weeklyCountCache = new Map<string, number>();
+
   const result: TimeRange[] = [];
 
   for (const [dayKey, dayRanges] of rangesByDay) {
     const dayStart = startOfDay(parseISO(dayKey));
     const dayEnd = endOfDay(dayStart);
 
-    // Count bookings for this day
+    // Check weekly booking limit
+    if (constraints.maxBookingsPerWeek) {
+      const weekStart = getWeekStart(dayStart);
+      const weekEnd = addDays(weekStart, 7);
+      const weekKey = format(weekStart, 'yyyy-MM-dd');
+
+      if (!weeklyCountCache.has(weekKey)) {
+        const weekBookingCount = await db.booking.count({
+          where: {
+            hostId: userId,
+            status: { in: ['PENDING', 'CONFIRMED'] },
+            startTime: { gte: weekStart, lt: weekEnd },
+          },
+        });
+        weeklyCountCache.set(weekKey, weekBookingCount);
+      }
+
+      const weekCount = weeklyCountCache.get(weekKey)!;
+      if (weekCount >= constraints.maxBookingsPerWeek) {
+        continue; // Skip all ranges for this day (week is full)
+      }
+    }
+
+    // Check daily booking limit
     if (constraints.maxBookingsPerDay) {
       const dayBookingCount = await db.booking.count({
         where: {
@@ -311,20 +348,53 @@ async function applyBookingCaps(
 }
 
 /**
+ * Align a time to the nearest slot boundary based on duration
+ * For 30 min: aligns to :00 and :30
+ * For 15 min: aligns to :00, :15, :30, :45
+ * For 60 min: aligns to :00
+ */
+function alignToSlotBoundary(time: Date, durationMinutes: number): Date {
+  const minutes = time.getMinutes();
+  const alignedMinutes = Math.ceil(minutes / durationMinutes) * durationMinutes;
+
+  if (alignedMinutes >= 60) {
+    // Roll over to next hour
+    const result = new Date(time);
+    result.setMinutes(0, 0, 0);
+    result.setHours(result.getHours() + 1);
+    return result;
+  }
+
+  const result = new Date(time);
+  result.setMinutes(alignedMinutes, 0, 0);
+  return result;
+}
+
+/**
  * Slice available ranges into bookable slots of the specified duration
+ * Slots are aligned to clean time boundaries (e.g., :00, :30 for 30-min slots)
  */
 function sliceIntoSlots(ranges: TimeRange[], durationMinutes: number): TimeRange[] {
   const slots: TimeRange[] = [];
 
+  // Use the event duration as the slot interval for clean scheduling
+  const slotInterval = durationMinutes;
+
   for (const range of ranges) {
-    let slotStart = range.start;
+    // Align the start time to the nearest slot boundary
+    let slotStart = alignToSlotBoundary(range.start, slotInterval);
+
+    // If alignment moved us before the range start, advance by one interval
+    if (isBefore(slotStart, range.start)) {
+      slotStart = addMinutes(slotStart, slotInterval);
+    }
 
     while (differenceInMinutes(range.end, slotStart) >= durationMinutes) {
       slots.push({
         start: slotStart,
         end: addMinutes(slotStart, durationMinutes),
       });
-      slotStart = addMinutes(slotStart, 15); // 15-minute increments
+      slotStart = addMinutes(slotStart, slotInterval);
     }
   }
 
@@ -464,7 +534,7 @@ async function getConstraints(
         bufferAfter: eventType.bufferAfter ?? constraints.bufferAfter,
         minimumNotice: eventType.minimumNotice ?? constraints.minimumNotice,
         maxBookingsPerDay: eventType.maxBookingsPerDay ?? constraints.maxBookingsPerDay,
-        maxBookingsPerWeek: constraints.maxBookingsPerWeek,
+        maxBookingsPerWeek: (eventType as { maxBookingsPerWeek?: number | null }).maxBookingsPerWeek ?? constraints.maxBookingsPerWeek,
       };
     }
   }
