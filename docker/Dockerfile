@@ -103,6 +103,9 @@ RUN mkdir -p /app/apps/api/node_modules/@node-rs && \
     ln -sf /app/node_modules/@prisma/client /app/apps/api/node_modules/@prisma/client && \
     mkdir -p /app/apps/api/node_modules/.prisma && \
     ln -sf /app/node_modules/.prisma/client /app/apps/api/node_modules/.prisma/client && \
+    # Create symlinks for date-fns packages (required by availability engine)
+    ln -sf /app/node_modules/date-fns /app/apps/api/node_modules/date-fns && \
+    ln -sf /app/node_modules/date-fns-tz /app/apps/api/node_modules/date-fns-tz && \
     echo "Prisma client regenerated and modules linked successfully"
 
 # Set ownership
