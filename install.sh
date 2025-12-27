@@ -1255,6 +1255,10 @@ build_and_start() {
 
     cd "$INSTALL_DIR"
 
+    # Clean up any existing containers and volumes for fresh install
+    log_info "Cleaning up any existing containers and volumes..."
+    docker compose down -v 2>/dev/null || true
+
     # Build images
     case $PROXY_TYPE in
         nginx)
