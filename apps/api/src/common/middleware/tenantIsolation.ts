@@ -11,18 +11,12 @@ const TENANT_SCOPED_MODELS = [
   'BookingAuditLog',
 ];
 
-interface MiddlewareParams {
-  model?: string;
-  action: string;
-  args: Record<string, unknown>;
-  dataPath: string[];
-  runInTransaction: boolean;
-}
+// Using 'any' for Prisma middleware compatibility - the actual types are checked at runtime
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PrismaMiddleware = (params: any, next: (params: any) => Promise<any>) => Promise<any>;
 
-type MiddlewareNext = (params: MiddlewareParams) => Promise<unknown>;
-
-export function createTenantIsolationMiddleware() {
-  return async (params: MiddlewareParams, next: MiddlewareNext) => {
+export function createTenantIsolationMiddleware(): PrismaMiddleware {
+  return async (params, next) => {
     const ctx = getContextSafe();
 
     // Skip if no context or no organization

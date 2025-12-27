@@ -3,6 +3,7 @@
 
 interface Booking {
   id: string;
+  uid: string;
   organizationId: string;
   eventTypeId: string | null;
   hostId: string;
@@ -12,6 +13,7 @@ interface Booking {
   status: string;
   title: string | null;
   description: string | null;
+  location: string | null;
   meetingUrl: string | null;
   customFieldResponses: unknown;
   source: string;
@@ -27,6 +29,7 @@ interface Attendee {
   phone: string | null;
   userId: string | null;
   responseStatus: string;
+  isHost: boolean;
 }
 
 interface User {
@@ -306,7 +309,7 @@ export async function createBooking(data: CreateBookingData): Promise<BookingRes
           title: data.title,
           description: data.description,
           meetingUrl,
-          customFieldResponses: data.customFieldResponses ?? {},
+          customFieldResponses: (data.customFieldResponses ?? {}) as object,
           source: data.source ?? (ctx.apiKeyId ? 'API' : 'WEB'),
           attendees: {
             create: {
@@ -362,7 +365,7 @@ export async function createBooking(data: CreateBookingData): Promise<BookingRes
         },
       });
 
-      return booking as BookingWithRelations;
+      return booking as unknown as BookingWithRelations;
     });
 
     // 3. Queue notifications (outside transaction)
@@ -409,7 +412,7 @@ export async function createBooking(data: CreateBookingData): Promise<BookingRes
       startTime: result.startTime,
       endTime: result.endTime,
       timezone: result.timezone,
-      status: result.status,
+      status: result.status as BookingStatus,
       title: result.title,
       description: result.description,
       location: result.location,
@@ -420,7 +423,7 @@ export async function createBooking(data: CreateBookingData): Promise<BookingRes
         email: a.email,
         name: a.name,
         phone: a.phone,
-        responseStatus: a.responseStatus,
+        responseStatus: a.responseStatus as AttendeeResponse,
         isHost: a.isHost,
       })),
       host: result.host,
@@ -493,7 +496,7 @@ export async function cancelBooking(
       },
     });
 
-    return updated as BookingWithRelations;
+    return updated as unknown as BookingWithRelations;
   });
 
   // Queue notifications
@@ -536,7 +539,7 @@ export async function cancelBooking(
     startTime: result.startTime,
     endTime: result.endTime,
     timezone: result.timezone,
-    status: result.status,
+    status: result.status as BookingStatus,
     title: result.title,
     description: result.description,
     location: result.location,
@@ -547,7 +550,7 @@ export async function cancelBooking(
       email: a.email,
       name: a.name,
       phone: a.phone,
-      responseStatus: a.responseStatus,
+      responseStatus: a.responseStatus as AttendeeResponse,
       isHost: a.isHost,
     })),
     host: result.host,
@@ -596,7 +599,7 @@ export async function confirmBooking(bookingId: string): Promise<BookingResult> 
       },
     });
 
-    return updated as BookingWithRelations;
+    return updated as unknown as BookingWithRelations;
   });
 
   // Queue notification
@@ -619,7 +622,7 @@ export async function confirmBooking(bookingId: string): Promise<BookingResult> 
     startTime: result.startTime,
     endTime: result.endTime,
     timezone: result.timezone,
-    status: result.status,
+    status: result.status as BookingStatus,
     title: result.title,
     description: result.description,
     location: result.location,
@@ -630,7 +633,7 @@ export async function confirmBooking(bookingId: string): Promise<BookingResult> 
       email: a.email,
       name: a.name,
       phone: a.phone,
-      responseStatus: a.responseStatus,
+      responseStatus: a.responseStatus as AttendeeResponse,
       isHost: a.isHost,
     })),
     host: result.host,
