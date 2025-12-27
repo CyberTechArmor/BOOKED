@@ -1646,9 +1646,21 @@ build_and_start() {
 
             # Check if certificate was obtained
             if [ -f "./certbot/conf/live/$DOMAIN/fullchain.pem" ]; then
-                # Reload nginx with real certificate
-                log_info "Reloading nginx with Let's Encrypt certificate..."
-                docker compose -f docker-compose.yml -f docker-compose.nginx.yml exec -T nginx nginx -s reload
+                # Wait for api and web containers to be running before reloading nginx
+                log_info "Waiting for API and Web services to be ready..."
+                local max_attempts=30
+                local attempt=0
+                while [ $attempt -lt $max_attempts ]; do
+                    if docker compose -f docker-compose.yml -f docker-compose.nginx.yml ps api web 2>/dev/null | grep -q "running"; then
+                        break
+                    fi
+                    attempt=$((attempt + 1))
+                    sleep 2
+                done
+
+                # Restart nginx to pick up the new certificate and resolve upstreams
+                log_info "Restarting nginx with Let's Encrypt certificate..."
+                docker compose -f docker-compose.yml -f docker-compose.nginx.yml restart nginx
                 log_success "SSL certificate obtained and nginx configured"
             else
                 log_warning "Failed to obtain Let's Encrypt certificate"
