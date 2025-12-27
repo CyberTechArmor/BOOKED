@@ -91,16 +91,26 @@ COPY --from=api-builder /app/apps/api/src/types ./apps/api/src/types
 # Copy api's node_modules from api-builder (includes .prisma, @prisma, @node-rs if not hoisted)
 COPY --from=api-builder /app/apps/api/node_modules ./apps/api/node_modules
 
-# Also copy @prisma/client and @node-rs from root if hoisted
-# tsx resolves modules relative to file location, symlinks don't work
-RUN if [ -d /app/node_modules/@prisma/client ]; then \
-      mkdir -p /app/apps/api/node_modules/@prisma && \
+# Ensure @prisma/client and @node-rs/argon2 are available for seed script
+# tsx resolves modules relative to file location, so they must be in apps/api/node_modules
+# Check both hoisted (root) and non-hoisted (apps/api) locations
+RUN mkdir -p /app/apps/api/node_modules/@prisma /app/apps/api/node_modules/@node-rs && \
+    # Copy @prisma/client from wherever it exists
+    if [ -d /app/node_modules/@prisma/client ]; then \
       cp -r /app/node_modules/@prisma/client /app/apps/api/node_modules/@prisma/; \
+    elif [ ! -d /app/apps/api/node_modules/@prisma/client ]; then \
+      echo "ERROR: @prisma/client not found in either location" && exit 1; \
     fi && \
+    # Copy @node-rs/argon2 from wherever it exists
     if [ -d /app/node_modules/@node-rs/argon2 ]; then \
-      mkdir -p /app/apps/api/node_modules/@node-rs && \
       cp -r /app/node_modules/@node-rs/argon2 /app/apps/api/node_modules/@node-rs/; \
-    fi
+    elif [ ! -d /app/apps/api/node_modules/@node-rs/argon2 ]; then \
+      echo "ERROR: @node-rs/argon2 not found in either location" && exit 1; \
+    fi && \
+    # Verify the modules exist
+    echo "Verifying modules..." && \
+    ls -la /app/apps/api/node_modules/@prisma/client && \
+    ls -la /app/apps/api/node_modules/@node-rs/argon2
 
 # Set ownership
 RUN chown -R booked:nodejs /app
