@@ -89,6 +89,9 @@ COPY --from=api-builder /app/apps/api/dist ./apps/api/dist
 COPY --from=api-builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=api-builder /app/apps/api/src/types ./apps/api/src/types
 COPY --from=api-builder /app/apps/api/node_modules/.prisma ./apps/api/node_modules/.prisma
+# Copy @prisma/client to api's node_modules for seed script (tsx module resolution)
+COPY --from=deps /app/node_modules/@prisma/client ./apps/api/node_modules/@prisma/client
+COPY --from=deps /app/node_modules/@node-rs ./apps/api/node_modules/@node-rs
 
 # Set ownership
 RUN chown -R booked:nodejs /app
