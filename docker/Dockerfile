@@ -96,6 +96,18 @@ COPY --from=api-builder /app/apps/api/node_modules ./apps/api/node_modules
 # IMPORTANT: Only copy from root if NOT already present - the api-builder version is correctly
 # configured to find .prisma/client in apps/api/node_modules, root version looks at wrong path
 RUN set -e && \
+    # First, ensure .prisma/client exists - copy from root if needed (when hoisted)
+    if [ ! -d /app/apps/api/node_modules/.prisma/client ]; then \
+      if [ -d /app/node_modules/.prisma/client ]; then \
+        echo "Copying .prisma/client from root (was hoisted)..." && \
+        mkdir -p /app/apps/api/node_modules/.prisma && \
+        cp -r /app/node_modules/.prisma/client /app/apps/api/node_modules/.prisma/; \
+      else \
+        echo "ERROR: .prisma/client not found in either location - prisma generate may have failed" && exit 1; \
+      fi; \
+    else \
+      echo ".prisma/client already exists in apps/api/node_modules"; \
+    fi && \
     # Check if @prisma/client exists, copy from root only if missing
     if [ ! -d /app/apps/api/node_modules/@prisma/client ]; then \
       if [ -d /app/node_modules/@prisma/client ]; then \
@@ -119,10 +131,6 @@ RUN set -e && \
       fi; \
     else \
       echo "@node-rs/argon2 already exists in apps/api/node_modules"; \
-    fi && \
-    # Verify .prisma/client exists (the generated client)
-    if [ ! -d /app/apps/api/node_modules/.prisma/client ]; then \
-      echo "ERROR: .prisma/client not found - prisma generate may have failed" && exit 1; \
     fi && \
     echo "All modules verified successfully"
 
