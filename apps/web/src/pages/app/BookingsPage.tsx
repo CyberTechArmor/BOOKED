@@ -104,7 +104,7 @@ export default function BookingsPage() {
 
   if (isLoading && bookings.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8">
+      <div className="p-6 lg:p-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Bookings</h1>
         <div className="card">
           <p className="text-gray-500">Loading bookings...</p>
@@ -114,7 +114,7 @@ export default function BookingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="p-6 lg:p-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Bookings</h1>

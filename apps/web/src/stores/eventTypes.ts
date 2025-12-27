@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useAuthStore } from './auth';
 
 export type AssignmentType = 'SINGLE' | 'ROUND_ROBIN' | 'COLLECTIVE';
 export type LocationType = 'MEET' | 'PHONE' | 'IN_PERSON' | 'CUSTOM';
@@ -54,6 +55,18 @@ export interface CreateEventTypeInput {
   maxBookingsPerDay?: number;
 }
 
+// Helper to get organization headers
+function getOrgHeaders(): HeadersInit {
+  const org = useAuthStore.getState().organization;
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  if (org?.slug) {
+    headers['X-Organization'] = org.slug;
+  }
+  return headers;
+}
+
 interface EventTypeState {
   eventTypes: EventType[];
   isLoading: boolean;
@@ -73,6 +86,7 @@ export const useEventTypeStore = create<EventTypeState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const response = await fetch('/api/v1/event-types', {
+        headers: getOrgHeaders(),
         credentials: 'include',
       });
 
@@ -94,7 +108,7 @@ export const useEventTypeStore = create<EventTypeState>((set, get) => ({
   createEventType: async (input: CreateEventTypeInput) => {
     const response = await fetch('/api/v1/event-types', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getOrgHeaders(),
       credentials: 'include',
       body: JSON.stringify(input),
     });
@@ -112,7 +126,7 @@ export const useEventTypeStore = create<EventTypeState>((set, get) => ({
   updateEventType: async (id: string, input: Partial<CreateEventTypeInput>) => {
     const response = await fetch(`/api/v1/event-types/${id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getOrgHeaders(),
       credentials: 'include',
       body: JSON.stringify(input),
     });
@@ -132,6 +146,7 @@ export const useEventTypeStore = create<EventTypeState>((set, get) => ({
   deleteEventType: async (id: string) => {
     const response = await fetch(`/api/v1/event-types/${id}`, {
       method: 'DELETE',
+      headers: getOrgHeaders(),
       credentials: 'include',
     });
 

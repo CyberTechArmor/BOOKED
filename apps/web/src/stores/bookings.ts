@@ -1,6 +1,20 @@
 import { create } from 'zustand';
+import { useAuthStore } from './auth';
 
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'NO_SHOW';
+
+// Helper to get organization headers
+function getOrgHeaders(contentType = false): HeadersInit {
+  const org = useAuthStore.getState().organization;
+  const headers: HeadersInit = {};
+  if (contentType) {
+    headers['Content-Type'] = 'application/json';
+  }
+  if (org?.slug) {
+    headers['X-Organization'] = org.slug;
+  }
+  return headers;
+}
 
 export interface Attendee {
   email: string;
@@ -80,6 +94,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       if (query.cursor) params.append('cursor', query.cursor);
 
       const response = await fetch(`/api/v1/bookings?${params.toString()}`, {
+        headers: getOrgHeaders(),
         credentials: 'include',
       });
 
@@ -106,6 +121,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   confirmBooking: async (id: string) => {
     const response = await fetch(`/api/v1/bookings/${id}/confirm`, {
       method: 'POST',
+      headers: getOrgHeaders(),
       credentials: 'include',
     });
 
@@ -123,7 +139,7 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   cancelBooking: async (id: string, reason?: string) => {
     const response = await fetch(`/api/v1/bookings/${id}/cancel`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getOrgHeaders(true),
       credentials: 'include',
       body: JSON.stringify({ reason }),
     });
