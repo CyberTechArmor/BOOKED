@@ -134,7 +134,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     };
 
     // Store context on request for later access
-    (request as unknown as { context: RequestContext }).context = ctx;
+    (request as unknown as { requestContext: RequestContext }).requestContext = ctx;
   });
 
   // Wrap all handlers in context
