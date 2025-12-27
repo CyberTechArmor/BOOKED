@@ -40,6 +40,9 @@ RUN cd apps/api && ../../node_modules/.bin/prisma generate
 # Build API
 RUN npm run build -w apps/api
 
+# Compile seed script for production use
+RUN cd apps/api && ../../node_modules/.bin/tsc prisma/seed.ts --outDir prisma --esModuleInterop --skipLibCheck --resolveJsonModule || true
+
 # ==============================================================================
 # Stage 4: Web Builder
 # ==============================================================================
