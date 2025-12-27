@@ -28,23 +28,23 @@
 
 /* Dark mode */
 .dark {
-  --primary: #FAFAFA;
-  --primary-hover: #E4E4E7;
-  --accent: #FAFAFA;
-  --background: #09090B;
-  --background-secondary: #18181B;
-  --foreground: #FAFAFA;
-  --foreground-secondary: #A1A1AA;
-  --muted: #71717A;
-  --border: #27272A;
-  --border-strong: #3F3F46;
-  --input-bg: #18181B;
-  --card-bg: #18181B;
+  --primary: #FFFFFF;
+  --primary-hover: #F4F4F5;
+  --accent: #FFFFFF;
+  --background: #0A0A0B;
+  --background-secondary: #141416;
+  --foreground: #FFFFFF;
+  --foreground-secondary: #D4D4D8;
+  --muted: #A1A1AA;
+  --border: #2D2D32;
+  --border-strong: #4A4A52;
+  --input-bg: #1A1A1E;
+  --card-bg: #141416;
   --error: #F87171;
   --success: #4ADE80;
   --warning: #FACC15;
-  --card-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-  --card-shadow-hover: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4);
+  --card-shadow-hover: 0 4px 8px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
   color-scheme: dark;
 }
 
@@ -82,13 +82,22 @@ body {
 
   .btn-primary {
     @apply btn shadow-sm;
+    background-color: #18181B;
+    color: #FFFFFF;
+  }
+
+  .dark .btn-primary {
     background-color: var(--primary);
     color: var(--background);
   }
 
   .btn-primary:hover:not(:disabled) {
-    background-color: var(--primary-hover);
+    background-color: #27272A;
     @apply shadow-md;
+  }
+
+  .dark .btn-primary:hover:not(:disabled) {
+    background-color: var(--primary-hover);
   }
 
   .btn-primary:focus {
@@ -165,11 +174,17 @@ body {
     @apply w-full px-3.5 py-2.5 rounded-lg text-base
            transition-all duration-150
            focus:outline-none focus:ring-2;
-    background-color: var(--input-bg);
-    border: 1px solid var(--border);
-    color: var(--foreground);
+    background-color: #FFFFFF;
+    border: 1px solid #18181B;
+    color: #09090B;
     font-size: 15px;
     letter-spacing: -0.01em;
+  }
+
+  .dark .input {
+    background-color: var(--input-bg);
+    border-color: var(--border-strong);
+    color: var(--foreground);
   }
 
   .input::placeholder {
@@ -177,12 +192,20 @@ body {
   }
 
   .input:hover:not(:disabled):not(:focus) {
-    border-color: var(--border-strong);
+    border-color: #27272A;
+  }
+
+  .dark .input:hover:not(:disabled):not(:focus) {
+    border-color: var(--foreground-secondary);
   }
 
   .input:focus {
-    border-color: var(--primary);
+    border-color: #18181B;
     @apply ring-zinc-400/20;
+  }
+
+  .dark .input:focus {
+    border-color: var(--primary);
   }
 
   .input:disabled {
