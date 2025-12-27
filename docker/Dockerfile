@@ -88,8 +88,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=api-builder /app/apps/api/dist ./apps/api/dist
 COPY --from=api-builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=api-builder /app/apps/api/src/types ./apps/api/src/types
-# Copy api's node_modules (includes .prisma, @prisma/client, @node-rs for seed script)
-COPY --from=api-builder /app/apps/api/node_modules ./apps/api/node_modules
+# Copy generated Prisma client (created by prisma generate)
+COPY --from=api-builder /app/apps/api/node_modules/.prisma ./apps/api/node_modules/.prisma
 
 # Set ownership
 RUN chown -R booked:nodejs /app
